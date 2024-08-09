@@ -4,6 +4,8 @@ https://bbs.aw-ol.com/assets/uploads/files/1616985814689-risc-v-reader-chinese-v
 
 RV32I是RISC-V固定不变的基础整数指令集，是RISC-V的核心内容
 
+[toc]
+
 # 汇编基础：
 
 ## 概述
@@ -13,9 +15,6 @@ RV32I是RISC-V固定不变的基础整数指令集，是RISC-V的核心内容
 每种 CPU 的机器指令都是不一样的，因此对应的汇编语言也不一样
 
 ![img](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408061753372.png)
-
-
-
 
 
 ## 寄存器
@@ -34,6 +33,7 @@ RV32I是RISC-V固定不变的基础整数指令集，是RISC-V的核心内容
 
 寄存器只能存放很少量的数据，大多数时候，CPU 要指挥寄存器，直接跟内存交换数据。所以，除了寄存器，还必须了解内存怎么储存数据。
 
+## 
 
 
 https://www.ruanyifeng.com/blog/2018/01/assembly-language-primer.html
