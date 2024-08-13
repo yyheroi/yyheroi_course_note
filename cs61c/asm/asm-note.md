@@ -1,3 +1,5 @@
+# 第一章
+
 ## 检测点1.1
 
 (1) 1个CPU的寻址能力为8KB，那么它的地址总线的宽带为 13。
@@ -13,6 +15,12 @@ x(2)1KB的存储器有 `1024` 个存储单元。存储单元的编号从`0` 到 
 ### 注意
 
 8086CPU有14个寄存器，AX、BX、CX、DX、SI、DI、SP、BP、IP、CS、SS、DS、ES、PSW
+
+
+
+
+
+# 第二章
 
 ## 检查点2.1
 
@@ -49,9 +57,9 @@ x（1）给定段地址为0001H，仅通过变化偏移地址寻址，cpu的寻�
 
 
 
-### 2.10 CS和IP注意
+### 2.10 CS和IP注意知识点
 
-CS，代码段寄存器；IP为指令指针寄存器
+**CS**，`代码段寄存器`；IP为`指令指针寄存器`
 
 8086PC机中，任意时刻，设CS中的内容为M，IP中的内容为N，8086CPU将从内存`Mx16+N`单元开始，读取一条指令并执行
 
@@ -68,19 +76,175 @@ jmp使用方法：
 
 ## 检查点2.3
 
-
 x下面3条指令执行后，CPU几次修改IP？都在说明时候？最后IP中的值是多少？
-mov ax，bx
-sub ax，bx
-jump ax
+mov ax，bx			；ax=bx
+sub ax，bx			 ；ax=0
+jump ax				  ；IP=ax=0
 
-修改3次，第一次是执行完mov ax，bx后，第二次是sub ax，bx后，第三次是jump ax，修改IP的值；最后IP的值是ax
+修改4次，第一次是执行完mov ax，bx，第二次是sub ax，bx，第三次是jump ax，第四次是jump ax；最后IP的值是0
+
+## 实验1 (8953)
+
+使用DosBox 的debug 功能
+
+相关命令有 
+
+R（查看、修改CPU寄存器的内容）
+
+D（查看内存中的内容）
+
+E（修改内存中的内容）
+
+U（将内存中的机器指令翻译成汇编指令）
+
+T（执行一条机器指令）
+
+A（以汇编指令的格式在内存中写入一条机器指令）
+
+1.进入Debug 
+
+r查看cpu寄存器的内容，注意CS和IP的值，073F：0100，此处存的机器码为0000
+
+![image-20240812101847856](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408121018179.png)
+
+2.使用汇编操作内存相关数据
+
+a 1000：0
+
+mov ax,1
+add ax,ax
+
+3.查看内存数据 
+
+d 2000：0 f
+
+4.修改内存数据
+
+e 2000：0  0 1 2 3 4 
+
+# 第三章
+
+不能直接操作DS(段寄存器)
+
+mov指令形式：
+
+mov寄存器，数据	比如: mov ax,8
+mov寄存器，寄存器	比如: mov ax,bx
+mov寄存器，内存单元	比如: mov ax,[0]
+mov内存单元，寄存器	比如: mov [0],ax
+mov段寄存器，寄存器	比如: mov ds,ax
+
+DS，`数据段寄存器`
+
+## 检查点3.1
+
+(1)
+
+0000:0000 70 80 F0 30  EF 60  30  E2-00 80  80 12 66 20 22 60
+0000:0010 62 26 E6 D6 CC 2E 3C 3B-AB BA 00 00 26 06 66 88
+
+mov ax,1
+mov ds,ax
+mov ax,[0000]		ax=2662H
+mov bx,[0001]		bx=E626H
+mov ax,bx			  ax=E626H
+mov ax,[0000] 	   ax=2662H
+mov bx,[0002] 	   bx=D6E6H
+add ax,bx			   ax=FD48H
+add ax,[0004] 		ax=2C14H
+mov ax,0				ax=0
+mov al,[0002]		 ax=00E6H
+mov bx,0				bx=0
+mov bl,[000C]		bx=0026H
+add al,bl				ax=000CH
+
+(2)
+
+CS=2000H，IP=1000H，AX=0，BX=0
+
+1.写出cpu执行的指令序列
+mov ax,6622H			CS=2000H,IP=3H     	  ax=6622H,bx=0,DS=1000H
+jmp 0ff0:0100			 CS=0FF0H,IP=100H	   ax=6622H,bx=0,DS=1000H
+mov ax,2000H			CS=0FF0H,IP=103H 	  ax=2000H,bx=0,DS=1000H
+mov ds,ax				   CS=0FF0H,IP=105H       ax=2000H,bx=0,DS=2000H
+mov ax,[0008]             CS=0FF0H,IP=108H 	  ax=C389H,bx=0,DS=2000H
+mov ax,[0002]             CS=0FF0H,IP=10BH  	 ax=EA66H,bx=0,DS=2000H
+
+数据和出现都是二进制形式存在内存中的，通过段地址来区分，数据就是DS、程序就CS
+
+### 3.7 SS和SP注意知识点
+
+SS:SP在任意时刻指向栈顶元素
+
+SS，栈段地址寄存器，SP栈偏移地址寄存器
+
+push和pop指令执行时，CPU从SS和SP中得到栈顶的地址
+
+在操作入栈和出栈，注意越界的问题，因为cpu不会检查越界情况，越界会导致数据覆盖
+
+cpu将内存中的某段内存当作代码是因为CS：IP指向了那里，CPU将内存当作栈，是因为SS：SP指向了那里
 
 
 
+## 检查点3.2
 
+(1)
+mov ax,2000H
+mov ss,ax
+mov sp,0010H
 
+(2)
+mov ax,1000H
+mov ss,ax
+mov sp,0000H
 
+## 实验2 (8954)
 
+```
+设置指令执行的内容起始段地址1000
+r cs 
+1000
+r ip
+0
 
+查看1000段地址处的数据
+d 1000:0
+```
 
+向1000:0地址写入相关汇编指令
+![image-20240813175003356](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131750726.png)
+
+将2000:0内容清空并查看
+
+```
+e 2000:0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+d 2000:0 f
+```
+
+ffff:0出数据为：
+![image-20240813175135726](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131751747.png)
+
+mov ax,[0]  ;ax = C0EAH
+add ax,[2]  ;ax =  C0FCH
+mov bx,[4] ;bx = 30F0H
+add bx,[6]  ;bx = 6021H
+
+![image-20240813181249443](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131812484.png)
+
+push ax  ;sp = FE	修改的内存单元地址是22100内容为FC C0
+push bx  ;sp = FC	修改的内存单元地址是22098内容为21 60
+pop ax  ;sp = FE	;ax = 6021H
+pop bx  ;sp = 100  ;bx = C0FCH
+
+![image-20240813181337008](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131813041.png)
+
+push [4] ;sp = 102	修改的内存单元地址是22100  内容为 F0 30
+push [6] ;sp = 104    修改的内存单元地址是22102  内容为 31 2F
+
+![image-20240813181534231](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131815257.png)
+
+![image-20240813181713809](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131817844.png)
+
+查看2200：E0处内存
+
+![image-20240813181801492](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131818525.png)
