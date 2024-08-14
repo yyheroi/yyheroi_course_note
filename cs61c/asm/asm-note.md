@@ -1,3 +1,5 @@
+[toc]
+
 # 第一章
 
 ## 检测点1.1
@@ -224,22 +226,26 @@ d 2000:0 f
 ffff:0出数据为：
 ![image-20240813175135726](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131751747.png)
 
+
+
+![image-20240813181249443](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131812484.png)
+
+
+
+![image-20240813181337008](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131813041.png)
+
 mov ax,[0]  ;ax = C0EAH
 add ax,[2]  ;ax =  C0FCH
 mov bx,[4] ;bx = 30F0H
 add bx,[6]  ;bx = 6021H
-
-![image-20240813181249443](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131812484.png)
 
 push ax  ;sp = FE	修改的内存单元地址是22100内容为FC C0
 push bx  ;sp = FC	修改的内存单元地址是22098内容为21 60
 pop ax  ;sp = FE	;ax = 6021H
 pop bx  ;sp = 100  ;bx = C0FCH
 
-![image-20240813181337008](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131813041.png)
-
-push [4] ;sp = 102	修改的内存单元地址是22100  内容为 F0 30
-push [6] ;sp = 104    修改的内存单元地址是22102  内容为 31 2F
+push [4] ;sp = FE	修改的内存单元地址是22100  内容为 F0 30
+push [6] ;sp = FC    修改的内存单元地址是22102  内容为 31 2F
 
 ![image-20240813181534231](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131815257.png)
 
@@ -248,3 +254,118 @@ push [6] ;sp = 104    修改的内存单元地址是22102  内容为 31 2F
 查看2200：E0处内存
 
 ![image-20240813181801492](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408131818525.png)
+
+# 第四章
+
+segment，一个段的开始，ends一个段的结尾
+
+段名 segment
+
+段名 ends
+
+![image-20240814100439065](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141014997.png)
+
+
+
+![image-20240814101354453](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141013485.png)
+
+一段正常的汇编代码
+
+![image-20240814101951992](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141342773.png)
+
+### 注意：
+
+dos命令
+
+dir type cd
+
+使用q命令退出Debug
+
+注意p命令执行 int 21
+
+## 实验3 (8955)
+
+```assembly
+assume cs:codesg
+codesg segment
+	mov ax,2000h	;ax 2000h
+	mov ss,ax		;ax 2000h ss 2000h
+	mov sp,0		;ax 2000h SS：SP为2000：0000
+	add sp,10		;ax 2000h SS：SP为2000：000A
+	pop ax			;ax 076A  SS：SP为2000：000C
+	pop bx			;ax 076A bx 7206		 SS：SP为2000：000E
+	push ax			;ax 076A bx 7206		 SS：SP为2000：000C
+	push bx			;ax 076A bx 7206		 SS：SP为2000：000A
+	pop ax			;ax 7206 bx 7206	 	 SS：SP为2000：000C
+	pop bx			;ax 7206 ax 076A		 SS：SP为2000：000E
+
+	mov ax,4c00h
+	int 21h
+	
+codesg ends
+end
+```
+
+- 生成1.exe文件步骤
+
+mount d d:\dos
+
+d:
+
+1.编译 masm.exe 1.asm 生成 1.obj
+
+2.连接 link.exe 1.obj 生成 1.exe
+
+3.debug 1.exe
+
+- 开始debug
+
+未执行pop ax前 SS：SP 为2000：000A
+
+ax 2000 bx 0000
+
+`2000：0处数据为`
+
+![image-20240814134224998](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141342040.png)
+
+执行pop ax 后SS：SP为2000：000C
+
+ax  076A bx 0000
+
+执行pop bx 后SS：SP为2000：000E
+
+ax  076A bx 7206
+
+执行push ax 后 SS：SP为2000：000C
+
+ax 076A bx 7206
+
+执行push bx 后 SS：SP为2000：000A
+
+ax 076A bx 7206
+
+`2000：0处数据为`
+
+![image-20240814135518123](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141355151.png)
+
+发生了交换
+
+然后
+
+执行pop ax 后 SS：SP为2000：000C
+
+ax 7206 bx 7206
+
+执行pop bx后 SS：SP为2000：000E
+
+ax 7206 ax 076A
+
+![image-20240814135901700](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141359743.png)
+
+### 注意：
+
+`push 命令后 SP寄存器的地址会减少2`
+
+`pop 命令后 SP寄存器地址会增加2`
+
+# 第五章
