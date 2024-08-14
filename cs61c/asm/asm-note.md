@@ -369,3 +369,71 @@ ax 7206 ax 076A
 `pop 命令后 SP寄存器地址会增加2`
 
 # 第五章
+
+
+
+![image-20240814150742642](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141507690.png)
+
+
+
+```
+assume cs:code
+code segment
+	mov ax 0ffffh
+	mov ds,ax
+	mov bx,0
+
+	mov dx,0
+
+	mov cx,0ch
+	
+s:	mov al,ds:[bx]
+	mov ah,0
+	add dx,ax
+	inc bx
+	loop s
+
+	mov ax,4c00h
+	int 12h
+code ends
+end
+```
+
+段地址寄存器：ds cs ss es
+
+mov al,ds:[bx]中 `ds称为段前缀`
+
+在dos下，有一段安全的空间 0：200~0：2ff（00200h~00ffh）256字节，该空间中没有系统或者其他程序的 数据 或者 代码
+
+
+
+t5.8.asm 将内存ffff:0~ffff:b中的数据复制到0:200 ~ 0:200b中
+
+0：200 ~ 0：20b   等同于  0020：0 ~ 0020：b
+
+```assembly
+assume cs:code 
+code segment
+	mov ax,0ffffh
+	mov ds,ax
+	
+	mov ax,0020h
+	mov es,ax
+	
+	mov bx,0
+	
+	mov cx,0bh
+	
+s: 	mov dl,ds:[bx]
+	mov es:[bx],dl
+	inc bx
+	loop s
+	
+	mov ax,4c00h
+	int 12h
+code ends
+end
+```
+
+## 实验4
+
