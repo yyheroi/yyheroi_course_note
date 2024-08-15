@@ -273,7 +273,7 @@ segment，一个段的开始，ends一个段的结尾
 
 ![image-20240814101951992](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141342773.png)
 
-### 注意：
+### 注意  dos命令 debug 命令：
 
 dos命令
 
@@ -282,6 +282,22 @@ dir type cd
 使用q命令退出Debug
 
 注意p命令执行 int 21
+
+debug中 
+
+t，一条指令一条指令的执行
+
+u，将cs段的地址翻译为汇编指令
+
+p，跳出loop，或者跳到中断
+
+g + IP；执行CS：IP处的指令，并打印出来
+
+r，查看寄存器的值，或者修改
+
+d，查看内存值
+
+e，修改内存值
 
 ## 实验3 (8955)
 
@@ -403,7 +419,7 @@ end
 
 mov al,ds:[bx]中 `ds称为段前缀`
 
-在dos下，有一段安全的空间 0：200~0：2ff（00200h~00ffh）256字节，该空间中没有系统或者其他程序的 数据 或者 代码
+在dos下，有一段安全的空间 0：200~0：2ff（00200h~02ffh）(0020:0000~0020:00ff)256字节，该空间中没有系统或者其他程序的 数据 或者 代码
 
 
 
@@ -436,4 +452,225 @@ end
 ```
 
 ## 实验4
+
+s4.2.asm
+
+```assembly
+assume cs:code 
+code segment
+	mov ax,0020h
+	mov ds,ax
+	mov bx,0
+	mov cx,3Fh
+	
+s:	mov ds:[bx],bx
+	inc bx
+	loop s
+	mov ax,4c00h
+	int 12h
+code ends
+end
+```
+
+s4.3.asm
+
+该段asm执行的地址是076A：0000
+
+![image-20240814162858339](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408141628412.png)
+
+```
+assume cs:code 
+code segment
+
+	mov ax,076Ah		;3
+	mov ds,ax			;2
+	mov ax,0020h		;3
+	mov es,ax			;2
+	mov bx,0			;3
+	mov cx,0018h		;3
+	
+s:	mov al,[bx]			;2
+	mov es:[bx],al		;3
+	inc bx				;1
+	loop s 				;2
+	mov ax,4c00h
+	inc 12h
+code ends
+end
+```
+
+# 第六章
+
+- 程序获取所需空间的方法
+
+1.加载程序时分配的
+
+2.程序执行过程中向系统申请的
+
+- dw
+
+dw命令，define word，使用dw定义2个字型数据（数据之间使用逗号分隔）
+
+dw 0123h,0456h
+
+```assembly
+assume cs:code 
+code segment
+	dw 0123h,0456h,0789h,0abcdh,0defh,ofedh,ocbah,0987h
+	start:	mov bx,0		;start程序入口标致
+			mov ax,0
+			
+			mov cx,8
+		s:	add ax,cs:[bx]
+			add bx,2
+			loop s
+			
+			mov ax,4c00h
+			int 21h
+code ends
+end start	;	通知编译器程序结束，通知编译器程序的入口
+			
+```
+
+## 检测点6.1
+
+t61.asm
+
+（1）依次用0:0 ~ 0:15单元中的内容改写程序中的数据
+
+```assembly
+assume cs:code 
+code segment
+	dw 0123h,0456h,0789h,0abcdh,0defh,ofedh,ocbah,0987h
+	
+start:
+	mov ax,0
+	mov ds,ax
+	mov bx,0
+	mov cx,8
+s:	mov ax,[bx]
+	mov cs:[bx],ax
+	add bx,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+```
+
+（2）依次用内存0：0 ~ 0：15单元中的内容该写程序中的数据，数据传输用栈来进行
+
+```
+assume cs:code 
+code segment
+	dw 0123h,0456h,0789h,0abcdh,0defh,0fedh,0cbah,0987h
+	dw 0,0,0,0,0,0,0,0,0,0
+start:
+	mov ax,cs
+	mov ss,ax
+	mov sp,32
+	
+	mov ax,0
+	mov ds,ax
+	mov bx,0
+	mov cx,8
+s:	push [bx]
+	pop cs:[bx] 
+	add bx,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+```
+
+- 6.3
+
+数据段data、代码段code、栈stack
+
+## 实验5
+
+### s51.asm
+
+```assembly
+assume cs:code,ds:data,ss:stack
+data segment
+	dw 0123h,0456h,0789h,0abcdh,0defh,ofedh,ocbah,0987h
+data ends
+stack segment
+	dw 0,0,0,0,0,0,0,0
+stack ends
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+	
+	mov ax,data
+	mov ds,ax
+	
+	push ds:[0]
+	push ds:[2]
+	pop ds:[2]
+	pop ds:[0]
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+![image-20240815101037348](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408151010429.png)
+
+cpu执行程序，程序返回前，data段中的数据是
+
+23 01 56 04 89 07 CD AB EF 0D ED 0F BA 0C 87 09
+
+  ![image-20240815101605031](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408151016068.png)
+
+DS=075A 、CS=075D、SS=0769
+
+程序加载后，data段地址为 076A ，stack段地址为 076B
+
+
+
+### s52.asm
+
+```
+assume cs:code,ds:data,ss:stack
+data segment
+	dw 0123h,0456h
+data ends
+stack segment
+	dw 0,0
+stack ends
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+	
+	mov ax,data
+	mov ds,ax
+	
+	push ds:[0]
+	push ds:[2]
+	pop ds:[2]
+	pop ds:[0]
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+
+
+
 
