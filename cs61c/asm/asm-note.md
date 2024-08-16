@@ -1034,3 +1034,190 @@ end start
 ```
 
 ## 实验6
+
+​	done!
+
+# 第八章
+
+```
+bx si di bp
+只有如下指令是正确的
+mov ax,[bx]
+mov ax,[si]
+mov ax,[di]
+mov ax,[bp]
+mov ax,[bx+si]
+mov ax,[bx+di]
+mov ax,[bp+si]
+mov ax,[bp+di]
+mov ax,[bx+si+idata]
+mov ax,[bx+di+idata]
+mov ax,[bp+si+idata]
+mov ax,[bp+di+idata]
+下面是错误的
+mov ax,[bx+bp]
+mov ax,[si+di]
+注意：
+只要在[..]中使用bp,而指令中没有显示的给出段地址,段地址默认在ss中
+```
+
+![image-20240816170526618](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161705676.png)
+
+处理指令分为三类：读取、写入、运算
+
+机器指令 `关心指令执行前一刻`
+
+指令执行前，所要处理的数据可以在3个地方：cpu内部、内存、端口
+
+例如：
+
+![image-20240816170831215](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161708261.png)
+
+### 数据位置的表达：
+
+1.立即数（idata），汇编指令中直接给出
+
+2.寄存器，汇编指令中给出相应的寄存器名
+
+3.段地址（SA）和偏移地址（EA）
+
+### 寻址方式：
+
+当数据放在内存中的时候，可以通过多种方式给定内存单元的偏移地址，来定位内存单元的方法称为寻址方式
+
+![image-20240816171216987](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161712047.png)
+
+### 指令要处理数据的长度：
+
+1.通过寄存器指明
+
+```
+mov ax,1	;ax指明了指令指向的内存单元是1字节
+mov al,1	;al指明了指令指向的内存单元是一个字单元
+```
+
+
+
+2.通过ptr指明
+
+例如
+
+```
+mov byte ptr ds:[0],1		;byte指明了指令指向的内存单元是1字节
+mov word ptr ds:[1],0001h	;word指明了指令指向的内存单元是一个字单元
+```
+
+3.注意push 指令只进行`字`操作
+
+### div指令：
+
+div做除法，注意以下问题：
+
+1.除数：有8位和16位，在一个reg或内存单元中
+
+2.被除数：默认放在 ax 或者 ax 和 dx 中，如果除数为8位，被除数则为16位，默认放在ax中存放，
+如果除数位16位，被除数则位32位，在dx和ax中存放，dx存放高八位，ax存放低八位
+
+3.结果：如果除数为8位，则al存储除法操作的商，ah存储除法操作的余数；
+如果除数为16为，则ax存储除法操作的商，dx存储除法操作的余数
+
+![image-20240816172831661](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161728709.png)
+
+![image-20240816172840314](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161728378.png)
+
+eg:
+
+利用除法指令计算100001/100
+
+```assembly
+100001 = 186A1H
+
+mov dx,1
+mov ax,86A1H
+mov bx,100
+div bx
+结果：商 ax 03e8 余数 dx 1 
+```
+
+debug中的操作
+
+```
+rcs 
+1000
+
+rip
+0
+
+a 1000:0
+mov dx,1
+mov ax,86A1H
+mov bx,100
+div bx
+
+t
+t
+t
+t
+```
+
+![image-20240816174200435](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161742493.png)
+
+
+
+### db、dw、dd：
+
+db 字节型数据
+
+dw 字型数据
+
+dd （double word）双字型数据
+
+### dup：
+
+dup是一个操作符，用于进行数据的重复
+
+例如：
+
+```assembly
+db 3 dup('abc','ABC') ;定义了18个字节,它们是'abcABCabcABCabcABC'
+
+stack segment
+	db 200 dup(0) 	;定义了容量位200字节的栈段
+stack ends
+```
+
+
+
+
+
+### q81.asm
+
+用div 计算data段中第一个数据除以第二个数据的结果，商存在第三个数据的存储单元中
+
+00 00 00 00 00 00 00 00
+
+```assembly
+assume cs:codesg,ds:datasg,ss:stack
+datasg segment
+	 dd 100001
+	 dw 100
+	 dw 0
+datasg ends
+ 
+codesg segment
+start:
+	mov ax,datasg
+	mov ds,ax
+	mov ax,ds:[0]	;低16位存在ax中
+	mov dx,ds:[2]	;高16位存在dx中
+	div word ptr ds:[4] ;用dx:ax中的32位数据除以ds:4字单元中的数据
+	mov ds:[6],ax	;商将存在ds:6字单元中
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+```
+
+
+
