@@ -641,7 +641,7 @@ DS=075A 、CS=075D、SS=0769
 
 ### s52.asm
 
-```
+```assembly
 assume cs:code,ds:data,ss:stack
 data segment
 	dw 0123h,0456h
@@ -670,7 +670,367 @@ code ends
 end start
 ```
 
+cpu执行程序，程序返回前，data段中的数据是
+
+23 01 56 04 
+
+DS=075A 、CS=076C、SS=0769
+
+程序加载后，data段地址为 076A ，stack段地址为 076B
+
+DS=076A 、CS=076C、SS=076B
+
+### s53.asm
+
+```
+assume cs:code,ds:data,ss:stack
+
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+	
+	mov ax,data
+	mov ds,ax
+	
+	push ds:[0]
+	push ds:[2]
+	pop ds:[2]
+	pop ds:[0]
+	
+	mov ax,4c00h
+	int 21h
+code ends
+data segment
+	dw 0123h,0456h
+data ends
+stack segment
+	dw 0,0
+stack ends
+code ends
+end start
+```
+
+cpu执行程序，程序返回前，data段中的数据是
 
 
 
+DS=075A 、CS=076C、SS=0769
 
+程序加载后，data段地址为 076A ，stack段地址为 076B
+
+DS=076D 、CS=076A、SS=076E
+
+s51.asm和s52.asm将最后一条伪指令“end start”改为 “end” 后不能正确执行，原因是无法找到程序入口
+
+### s55.asm
+
+编写code段中的代码，将a b段中的数据依次相加，结果存到c段中
+
+```
+assume cs:code 
+a segment
+	db 1,2,3,4,5,6,7,8
+a ends
+b segment
+	db 1,2,3,4,5,6,7,8
+b ends
+c segment
+	db 0,0,0,0,0,0,0,0
+c ends
+code segment
+start:
+	mov ax,a
+	mov ds,ax
+	mov ax,b
+	mov es,ax
+	mov ax,c
+	mov ss,ax
+	mov bx,0
+	
+	mov cx,8
+s:	mov ax,0
+	mov al,ds:[bx]
+	add al,es:[bx]
+	mov ss:[bx],al
+	inc bx
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+### s56.asm
+
+用push指令将a段中的前8个字型数据，逆序存储到b段中
+
+```assembly
+assume cs:code 
+a segment
+	dw 1,2,3,4,5,6,7,8,9,0ah,0bh,0ch,0dh,0eh,0fh,0ffh
+a ends
+b segment
+	dw 0,0,0,0,0,0,0,0
+b ends
+code segment
+start:
+	mov ax,a
+	mov ds,ax
+	mov ax,b
+	mov ss,ax
+	mov sp,16
+	mov bx,0
+	
+	mov cx,8
+s:	push ds:[bx]
+	inc bx
+	inc bx
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+
+
+# 第七章
+
+![image-20240816164850682](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161648751.png)
+
+```assembly
+
+mov ax,101b
+and ax,111b
+ax=101b
+mov ax,110b
+or ax,111b
+ax=111b
+
+字符大小写变化
+and al,11011111B 第5位置为0，则为大写字符
+or al,00100000B 第5位置为1，则为小写字符
+
+si和di和bx功能相似的寄存器，si和di不能分成两个8为寄存器
+可以通过[bx(si或者di) + idata]来指明一个内存单元，还可以通过[bx+di]和[bx+si]
+形式如下：
+mov ax,[bx+si]
+或者
+mov ax,[bx][si]
+```
+
+bx、si、idata访问内存单元格式如下
+
+![image-20240816154932450](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161549496.png)
+
+![image-20240816154629820](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161546932.png)
+
+
+
+问题7.2
+
+### q72.asm
+
+```assembly
+assume cs:codesg,ds:datasg
+datasg segment
+	db 'welcome to masm!'
+	db '................'
+datasg ends
+codesg segment
+start:
+	mov ax,datasg
+	mov ds,ax
+	mov si,0
+	
+	mov cx,8
+s:	mov ax,ds:[si]		;mov ax,0[si]
+	mov ds:[si+16],ax	;mov 16[si],ax
+	inc si
+	inc si
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+
+```
+
+
+
+### q76.asm
+
+将datasg段中每个单词的头一个字母变为大写字母
+
+```
+assume cs:codesg,ds:datasg
+datasg segment
+	db '1. file         '
+	db '2. edit         '
+	db '3. search       '
+	db '4. view         '
+	db '5. options      '
+	db '6. help         '
+datasg ends
+codesg segment
+start:
+	mov ax,datasg
+	mov ds,ax
+	mov si,3
+	mov bx,0
+	
+	mov cx,6
+s:  mov al,ds:[bx+si]
+	and al,11011111B
+	mov ds:[bx+si],al
+	add bx,16
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+```
+
+### q77.asm
+
+将datasg段中每个单词变为大写字母
+
+```assembly
+assume cs:codesg,ds:datasg
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             '
+	dw 0 				;定义一个字，暂存cx
+datasg ends
+codesg segment
+start:
+	mov ax,datasg
+	mov ds,ax
+	mov bx,0
+	
+	mov cx,4
+s0:	mov ds:[40h],cx
+	mov si,0
+	mov cx,3
+	
+s1:	mov al,ds:[bx+si]
+	and al,11011111B
+	mov ds:[bx+si],al
+	inc si
+	
+	loop s1
+
+	add bx,16
+	mov cx,ds:[40h]
+	loop s0
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+```
+
+or
+
+xx一般来说使用栈保存临时数据
+
+```
+assume cs:codesg,ds:datasg,ss:stack
+datasg segment
+	db 'ibm             '
+	db 'dec             '
+	db 'dos             '
+	db 'vax             ' 
+datasg ends
+stack segment
+	dw 0,0,0,0,0,0,0,0		;定义一个段，用来做栈段，容量为16个字节
+stack ends
+codesg segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+	mov ax,datasg
+	mov ds,ax
+	mov bx,0
+
+	
+	mov cx,4
+s0:	push cx
+	mov si,0
+	mov cx,3
+	
+s1:	mov al,ds:[bx+si]
+	and al,11011111B
+	mov ds:[bx+si],al
+	inc si
+	
+	loop s1
+
+	add bx,16
+	pop cx
+	loop s0
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+```
+
+### q78.asm
+
+将datasg段中每个单词的前4个字母改为大写字母
+
+```
+assume cs:codesg,ds:datasg,ss:stack
+datasg segment
+	db '1. display      '
+	db '2. brows        '
+	db '3. replace      '
+	db '4. modify       '
+datasg ends
+stack segment
+	dw 0,0,0,0,0,0,0,0		;定义一个段，用来做栈段，容量为16个字节
+stack ends
+codesg segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+	mov ax,datasg
+	mov ds,ax
+	mov bx,0
+
+	
+	mov cx,4
+s0:	push cx
+	mov si,3
+	mov cx,4
+	
+s1:	mov al,ds:[bx+si]
+	and al,11011111B
+	mov ds:[bx+si],al
+	inc si
+	
+	loop s1
+
+	add bx,16
+	pop cx
+	loop s0
+	
+	mov ax,4c00h
+	int 21h
+codesg ends
+end start
+```
+
+## 实验6
