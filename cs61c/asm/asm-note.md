@@ -1116,7 +1116,7 @@ div做除法，注意以下问题：
 1.除数：有8位和16位，在一个reg或内存单元中
 
 2.被除数：默认放在 ax 或者 ax 和 dx 中，如果除数为8位，被除数则为16位，默认放在ax中存放，
-如果除数位16位，被除数则位32位，在dx和ax中存放，dx存放高八位，ax存放低八位
+如果除数位16位，被除数则位32位，在dx和ax中存放，`dx存放高八位`，`ax存放低八位`
 
 3.结果：如果除数为8位，则al存储除法操作的商，ah存储除法操作的余数；
 如果除数为16为，则ax存储除法操作的商，dx存储除法操作的余数
@@ -1132,8 +1132,8 @@ eg:
 ```assembly
 100001 = 186A1H
 
-mov dx,1
-mov ax,86A1H
+mov dx,1	;高位数据
+mov ax,86A1H	;低位数据
 mov bx,100
 div bx
 结果：商 ax 03e8 余数 dx 1 
@@ -1197,13 +1197,13 @@ stack ends
 00 00 00 00 00 00 00 00
 
 ```assembly
-assume cs:codesg,ds:datasg,ss:stack
+assume cs:codesg,ds:datasg
 datasg segment
 	 dd 100001
 	 dw 100
 	 dw 0
 datasg ends
- 
+
 codesg segment
 start:
 	mov ax,datasg
@@ -1219,5 +1219,72 @@ codesg ends
 end start
 ```
 
+## 实验7
 
+t7.asm
+
+```assembly
+assume cs:codesg,es:table,ss:stack
+data segment 
+	db '1975','1976','1977','1978','1979','1980','1981','1983','1983'
+	db '1984','1985','1986','1987','1988','1989','1990','1991','1992'
+	db '1993','1994','1995'
+	dd 16,22,382,1356,2390,8000,16000,24486,50064,97479,140417,197514
+	dd 345980,590827,803530,1183000,1843000,2759000,3753000,4649000,5937000
+	dw 3,7,9,13,28,38,130,220,476,778,1001,1442,2258,2793,4037,5635,8226
+	dw 11542,14430,15257,17800
+data ends
+table segment 
+	db 21 dup ('year summ ne ?? ')
+table ends
+stack segment
+	db 8 dup (0)	
+stack ends
+codesg segment
+start:
+	mov ax,data
+	mov ds,ax
+	mov ax,table
+	mov es,ax
+	mov ax,stack
+	mov ss,ax
+	mov sp,16
+
+	mov dx,0
+	mov bx,0
+	mov si,0
+	mov di,0
+
+	mov cx,21
+s:	
+	;复制年份
+	mov ax,ds:[di]
+	mov es:[bx],ax
+	mov ax,ds:[di+2]
+	mov es:[bx+2],ax
+	
+	;复制收入
+	mov ax,ds:[di+84]
+	mov es:[bx+5],ax
+	mov dx,ds:[di+86] ;存储高字节数据
+	mov es:[bx+7],dx
+	;计算平均收入
+	div word ptr es:[bx+10]
+	mov es:[bx+13],ax
+
+	;复制雇员数
+	mov ax,ds:[si+168]
+	mov es:[bx+10],ax
+
+	add si,2 	;控制雇员数
+	add di,4 	;控制收入、年份
+	add bx,16 	;控制结构体数组成员
+	loop s
+
+	mov ax,4c00h
+	int 21h
+
+codesg ends
+end start
+```
 
