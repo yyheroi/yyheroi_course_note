@@ -1288,3 +1288,205 @@ codesg ends
 end start
 ```
 
+
+
+# 第九章
+
+### offset操作符
+
+```
+start:
+	mov ax,offset start 	;相当于mov zx,0
+	s: mov ax,offset s		;相当于mov ax,3 
+	nop					   ;机器码占1字节
+```
+
+
+
+### jmp指令
+
+jmp short 标号
+
+这种格式的jmp指令实现的是段内段转移，对ip的修改范围位-128 ~ 127
+
+cpu在执行jmp指令的时候不需要转移的目标地址
+
+![image-20240819164945827](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408191649939.png)
+
+jmp word ptr 内存单元地址，段内转移，存放的是转移的目的偏移量
+
+jmp dword ptr 内存单元地址，段间转移，高地址是专业的目的段地址，低地址是转移的目标偏移量
+
+### t91.asm
+
+```
+assume cs:code 
+data segment
+	dd 12345678H
+data ends
+code segment
+start:
+	mov ax,data
+	mov bx,ax
+	mov bx,0
+	mov [bx],
+	mov [bx+2],
+	jump dword ptr ds:[0]
+code ends
+end start
+
+```
+
+### jcxz指令
+
+**jcxz(**jmp if CX is zero**)有条件跳转指令，类似于段内短跳转jmp short，所能变化的ip范围同样为(-128~127)。**格式为 jcxz [标号]。**唯一的不同在于，只有当满足条件寄存器cx=0时，才会进行跳转，否则就和正常情况一样IP自增，按顺序执行下一条指令，这也是jcxz被称为有条件跳转指令的原因(只有满足条件才进行跳转)。**
+
+**ax/bx/cx/dx并不是英文字母abcd的简称，而分别是accumulate-register累加寄存器、based-register基地址寄存器、count-register计数寄存器、data-register 数据寄存器。**　
+
+**ax accumulate-register累加寄存器：**ax一般用于存放算术、逻辑运算中的操作数或结果。同时I/O指令也都需要使用ax与外设接口传递数据。
+
+　　**bx based-register基地址寄存器 ：**bx一般用于存放访问内存时的地址。在8086内存寻址时，指定偏移地址时有提到过。
+
+　　**cx count-register计数寄存器：**cx一般用于有条件跳转、循环、串操作指令。jcxz和loop循环等指令都依赖于cx寄存器。
+
+　　**dx data-register 数据寄存器：**dx一般用于寄存器间接寻址中的I/O指令中存放I/O端口的地址。
+
+### t92.asm
+
+```
+assume cs:code 
+
+code segment
+start:
+	mov ax,2000H
+	mov ds,ax
+	mov bx,0
+s:  
+	mov cl,[bx]
+	mov ch,0
+	mov cx,ds:[bx]
+	jcxz ok
+	inc bx
+	jmp short s
+ok:	
+	mov dx,bx
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+```
+
+### loop指令　　
+
+循环指令同样依赖寄存器`cx`。**格式为loop [标号]**。loop指令的语义是，首先将cx自减1，如果cx不为0，则跳转至标号处。否则什么也不做，离开循环，顺序执行下移。循环指令的跳转范围和有条件跳转指令一样，ip的变化范围为(-128~127)。
+
+### t93.asm
+
+```
+assume cs:code 
+
+code segment
+start:
+	mov ax,2000H
+	mov ds,ax
+	mov bx,0
+s:  
+	mov cl,[bx]
+	mov ch,0
+	jcxz ok
+	inc bx
+	loop s
+ok:	
+	dec bx
+	mov dx,bx
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+
+```
+
+## 实验8
+
+### s8.asm
+
+```assembly
+assume cs:codesg
+codesg segment
+	mov ax,4c00h			;3B
+	int 21h					;2B
+
+start:mov ax,0				;3B
+
+s:	nop						;1B
+	nop						;1B
+	mov di,offset s			;3B		mov di,0008h offset s=3+2+3=8
+	mov si,offset s2		;3B		mov si,0020h 0ffset s2=3+2+3+1+1+3+3+3+3+2+3+2+3=32
+	mov ax,cs:[si]			;3B
+	mov cs:[di],ax			;3B		将s2的标记处指令复制到s处  即s: nop nop 改为 s: jmp short s1 -> jmp -10
+
+s0:	jmp short s				;2B
+
+s1:	mov ax,0				;3B
+	int 21h					;2B
+	mov ax,0				;3B
+	
+s2: jmp short s1			; jmp -10
+	nop						
+codesg ends
+end start
+	
+```
+
+![image-20240820101946129](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408201019204.png)
+
+
+
+di 0008
+si 0020
+
+mov ax,cs:[si]	; ax = cs:0020该地址处内存单元的内容为F6EB
+
+mov cs:[di],ax	;将F6EB复制到 CS：0008处也就是  将s2处的jmp short s1的机器码复制到 s处
+
+```
+即：
+s:
+	nop
+	nop
+修改为如下：
+s: jmp short s1		该处机器码为：F6EB   F6为偏移量
+实际上 是 jmp的偏移量  jmp F6  -> jmp 1111 0110
+F6的原码为 1000 1010 即 -10
+偏移量-10个字节
+
+```
+
+![image-20240820102713664](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408201027723.png)
+
+然后跳转到程序的开通，即jmp 0000，可以正常结束程序
+
+
+
+### 补码与原码
+
+```
+在计算机系统中，数值一律用补码来表示（存储）。
+
+已知一个数值，求补码的操作分两种情况：
+（1）正数的补码：与原码相同。
+      例如，+9的补码是00001001。
+（2）负数的补码：符号位为1，其余位为该数绝对值的原码按位取反；然后整个数加1。
+      例如，-7的补码：因为是负数，则符号位为“1”,整个为10000111；其余7位为-7的绝对值+7的原码
+     0000111按位取反为1111000；再加1，所以-7的补码是11111001。
+     
+已知一个数的补码，求原码的操作分两种情况：
+（1）如果补码的符号位为“0”，表示是一个正数，所以补码就是该数的原码。
+（2）如果补码的符号位为“1”，表示是一个负数，求原码的操作可以是：符号位为1，其余各位取反，然后再整个数加1。
+     例如，已知一个补码为11111001，则原码是10000111（-7）：因为符号位为“1”，表示是一个负数，所以该位不变，仍为   “1”；其余7位1111001取反后为0000110；再加1，所以是10000111。
+```
+
+
+
