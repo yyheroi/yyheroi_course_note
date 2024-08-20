@@ -1290,7 +1290,7 @@ end start
 
 
 
-# 第九章
+# 第九章 转移指令原理
 
 ### offset操作符
 
@@ -1310,6 +1310,10 @@ jmp short 标号
 这种格式的jmp指令实现的是段内段转移，对ip的修改范围位-128 ~ 127
 
 cpu在执行jmp指令的时候不需要转移的目标地址
+
+jmp short 标号
+
+jmp near 标号
 
 ![image-20240819164945827](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408191649939.png)
 
@@ -1426,7 +1430,7 @@ end start
 
 ## 实验8
 
-### s8.asm
+### xs8.asm
 
 ```assembly
 assume cs:codesg
@@ -1568,7 +1572,182 @@ end start
 
 ![image-20240820140415877](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408201404952.png)
 
-### 检测点10.1
+# 第十章call和ret指令
+
+## ret和ref
+
+ret指令使用栈中的数据，修改IP的内容
+
+retf指令使用栈中的数据，修改cs和ip的内容
+
+cpu执行**ret**指令时
+
+（IP）=（（SS）*16 + （SP））
+（SP）= （SP）+ 2
+
+相当于 
+
+- pop ip
+
+cpu执行**retf**指令时
+
+（IP）=（（SS）*16 + （SP））
+（SP）= （SP）+ 2
+
+（CS）=（（SS）*16 + （SP））
+（SP）= （SP）+ 2
+
+相当于：
+
+ pop IP
+
+pop CS
+
+## call指令
+
+cpu执行call指令时
+
+- 1.将IP或者CS和IP压入栈中
+
+- 2.转移
+
+call不能实现短转移，
+
+cpu执行call指令时
+
+- （SP）=（SP）- 2
+
+（（SS）*16+（SP））= （IP）
+
+- （IP）=（IP）+16位位于
+
+相当于：
+
+push IP
+
+jmp near ptr 标号
+
+## 转移的目的地址在指令中的call指令
+
+`call far ptr 标号`实现的是段间转移
+
+- 1.(sp)=(sp)-2
+  ((ss)`*`16+(sp))=(CS)
+  (sp)=(sp)-2
+  ((ss)`*`16+(sp))=(IP)
+
+- 2.(CS)=标号所在段的段地址
+  （IP)=标号所在段中的偏移地址
+
+相当于：
+
+push CS
+push IP
+jump far ptr 标号
+
+## 转移地址在寄存器中的call指令
+
+`call 16位reg`
+
+(sp)=(sp)-2
+((ss)*16+(sp))=ip
+(IP)=(16位reg)
+
+相当于：
+
+push IP
+
+jmp 16位的reg
+
+## 转移地址在内存中的call指令
+
+- call word ptr 内存单元地址
+
+相当于
+
+push IP
+
+jmp word ptr 内存单元地址
+
+```assembly
+mov sp,10h
+mov ax,0123h
+mov ds:[0],ax
+call word ptr ds:[0]	;push IP -> ip=0123h,sp=sp-2 -> sp=0eh ,jmp near ip
+```
+
+
+
+- call dword ptr 内存单元地址
+
+push CS
+
+pus IP
+
+jmp dword ptr 内存单元地址
+
+```assembly
+mov sp,10h
+mov ax,0123h
+mov ds:[0],ax
+mov word ptr ds:[2],0
+call dword ptr ds:[0]	; push CS ,push IP, jmp far cs:ip
+cs=0,ip=0123h,sp=0ch
+
+```
+
+## call和ret配合使用
+
+```
+call 标号1
+	mov ax,4c00h
+	int 21h ;程序结束
+
+标号1：
+	指令
+	call 标号2
+	ret
+	
+标号2：
+	指令
+	ret
+```
+
+先执行标号1，再执行标号2，标号2ret，标号1ret
+
+## mul指令
+
+mul乘法指令
+
+（1）两个相乘的数：两个相乘的数要么是8位，要么都是16位，如果是8位，默认放在al中，另一个放在8位reg或者内存字节单元中；如果是16位，一个默认在ax中，另一个放在16位reg或者内存字单元中
+
+（2）结果：如果是8位乘法，结果默认放在ax中；如果是16位乘法，结果高位默认在dx中存放，低位在ax中
+
+例如：
+
+100*10；100小于255，可用8位乘法
+
+```assembly
+mov al,100
+mov bl,10
+mul bl
+;结果存放在ax中 ax=1000（03E8H）
+```
+
+计算100*10000
+
+需要用16位乘法
+
+```assembly
+mov ax,100
+mov bx,10000
+mul bx
+;结果低位存放在ax中，高位存放在dx中 ax=4240H dx=000Fh			(f4240h = 1000000)
+```
+
+
+
+## 检测点10.1 retf
 
 实现从1000：0000处开始执行指令
 
@@ -1583,11 +1762,308 @@ start:
 	mov ss,ax
 	mov sp,16
 	mov ax,1000h
-	push ax	;cs
+	push ax				;cs 
 	mov ax,0000h
-	push ax	;ip
-	retf
+	push ax				;ip 
+	retf			;先获取ip 000h，再获取 cs 1000h 再跳转
 code end
 end start
 ```
+
+## x检查点10.2 call 
+
+x下面程序执行后,ax中的数值为多少？ `6`
+
+```
+内存地址	 		机器码 			汇编指令
+1000：0			b8 00 00 			mov ax,0	;3B
+1000：3			e8 01 00			call s		;3B 	类似于push IP -> ip 3+3=6 ;jmp near s
+1000：6			40				    inc ax	 	;1B
+1000：7			58				    s: pop ax 	;
+```
+
+
+
+## 检测点10.3 call far ptr
+
+下面程序执行后,ax中的数值为多少？ `1010h`
+
+```assembly
+内存地址            机器码             汇编指令
+1000:0			b8 00 00		mov ax,0
+1000:3			9a 09 00 00 10   call far ptr s	;push CS -> cs=1000h,push IP -> ip=3+5=8,jump far ptr s
+1000:8			40 				inc ax			;未执行
+1000:9			58				s:pop ax		;ax=8
+								add ax,ax		;ax=16
+								pop bx			;bx=1000h
+								add ax,bx		;ax = 1000h + 10h
+
+```
+
+## 检测点10.4 call reg
+
+下面程序执行后,ax中的数值为多少？	`11`
+
+```assembly
+内存地址            机器码             汇编指令
+1000:0			b8 06 00			mov ax,6		;3B		ax=6
+1000:3			ff d0				call ax			;2B 	push IP-> ip =3+2=5,jump near ax -> jmp 6
+1000:5			40					inc ax			;1B		未执行
+1000:6								mov bp,sp		;		bp=sp -> sp=sp+2
+									add ax,[bp]		; ax+ss:sp	6+5
+```
+
+
+
+## 检测点10.5  call word
+
+(1)下面程序执行后，ax中的数值是多少？ 3
+
+```assembly
+assume cs:code
+stack segment
+	dw 8 dup(0)
+stack ends
+code segment
+start:
+	mov ax,stack	;3B
+	mov ss,ax		;2B
+	mov sp,16		;3B
+	mov ds,ax		;3B 
+	mov ax,0		;3B ax 0
+	call word ptr ds:[0eh] 	;push IP -> ip位于inc ax处的ip ,jmp ip
+					;ss:0eh   inc处的ip
+					;ds=ss:[0] ss:0eh
+	inc ax			;执行 ax 1
+	inc ax			;执行 ax 2
+	inc ax			;执行 ax 3
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+
+
+(2)下面程序执行后，ax和bx中的数值是多少？
+
+ax 1,bx 0
+
+```assembly
+assume cs:code
+data segment
+	dw 8 dup(0)
+data ends
+code segment
+start:
+	mov ax,data							 
+	mov ss,ax							 
+	mov sp,16							 
+	mov word ptr ss:[0],offset s		   
+	mov ss:[2],cs						 
+	call dword ptr ss:[0] 				 
+	nop								     
+s:
+	mov ax,offset s						 
+	sub ax,ss:[0ch]		;s.ip - nop.ip = 1		
+	mov bx,cs							
+	sub bx,ss:[0eh]						
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+![在这里插入图片描述](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408201654704.jpeg)
+
+
+
+
+
+
+
+
+
+### q101.asm
+
+```assembly
+assume cs:code 
+code segment
+start:
+	mov ax,1
+	mov cx,3
+	call s		;push ip=mov.bx.ax.ip , jmp s.ip
+	mov bx,ax	;(bx) 8
+	mov ax,4c00h
+	int 21h
+s:
+	add ax,ax	;执行3次 2 4 8 ax=8
+	loop s		;cx 为0后执行ret
+	ret			;pop ip, jmp mov.bx.ax.ip ,跳转至mov bx,ax
+code ends
+end start
+```
+
+
+
+
+
+
+
+### q1011.asm
+
+计算data段中的第一组数据的3次方，结果放在后面一组dword单元中
+
+```assembly
+assume cs:code 
+data segment
+	dw 1,2,3,4,5,6,7,8
+	dd 8 dup(0)
+data ends
+code segment
+start:
+	mov ax,data
+	mov ds,ax
+	mov di,16
+	mov si,0
+	
+	mov cx,8
+s:
+	mov bx,ds:[si]
+	call cube
+	mov ds:[di],ax
+	mov ds:[di+2],dx
+	add di,2
+	add si,2
+	loop s
+	
+    mov ax,4c00h
+	int 21h
+	
+cube:
+	mov ax,bx
+	mul bx
+	mul bx
+	ret
+code ends
+end start
+```
+
+
+
+## 实验10
+
+编写子程序
+
+名称：show_str
+
+功能：在指定的位置，用指定的颜色，显示一个用0结束的字符串
+
+参数：(dh) =行号（取值范围0~24），(dl)=列号（取值范围0~79） (cl)=颜色，ds:si指向字符串的首地址
+
+返回：无
+
+```assembly
+assume cs:code,ss:stack
+data segment 
+	db 'Welcome to masm!',0
+data ends
+stack segment
+	db 200 dup(0)
+stack ends
+code segment
+start:
+	mov dh,8
+	mov dl,3
+	mov cl,2
+	mov ax,data
+	mov ds,ax
+	mov si,0
+	call show_str
+	mov ax,4c00h
+	int 21h
+;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
+;参数 dh行号 dl列号 cl颜色 ds：si指向字符串的首地址
+show_str:
+	push bx
+	push dx
+	push cx
+	push ds
+	push si
+	push di
+
+	mov bx,0b800h
+;获取偏移量
+	mov ax,
+	mov dx,
+	
+	mov si,
+    mov si,0
+    mov di,0
+s:
+	change:
+	mov al,ds:[si]
+	mov ah,0
+	jcxz ok
+	
+	
+	mov es,ax		
+
+	mov bx,0
+	mov si,07c0h	; 80*2*12 + 32*2 从第十二行 32个字符开始
+	mov di,12h
+	
+	loop s
+	jmp short change
+	
+	ok:
+	pop di
+	pop si
+	pop ds
+	pop cx
+	pop dx
+	pop bx
+	ret
+	
+cube:
+	mov ax,bx
+	mul bx
+	ret	
+	
+	
+	
+code ends
+start end
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
