@@ -1221,7 +1221,7 @@ end start
 
 ## 实验7
 
-t7.asm
+### t7.asm
 
 ```assembly
 assume cs:codesg,es:table,ss:stack
@@ -1508,7 +1508,7 @@ F6的原码为 1000 1010 即 -10
      例如，已知一个补码为11111001，则原码是10000111（-7）：因为符号位为“1”，表示是一个负数，所以该位不变，仍为   “1”；其余7位1111001取反后为0000110；再加1，所以是10000111。
 ```
 
-## 实验九
+## 实验9
 
 要求 `在屏幕中间分别显示绿色、绿底红色、白底蓝色的字符串 'welcome to masm!'`
 7  6 5 4 3 2 1 0
@@ -1964,14 +1964,16 @@ end start
 
 返回：无
 
+### s101.asm    x
+
 ```assembly
-assume cs:code,ss:stack
+assume cs:code
 data segment 
 	db 'Welcome to masm!',0
+	db 'Welcome to masm!',0
 data ends
-stack segment
-	db 200 dup(0)
-stack ends
+
+
 code segment
 start:
 	mov dh,8
@@ -1981,81 +1983,781 @@ start:
 	mov ds,ax
 	mov si,0
 	call show_str
+
+	mov dh,10
+	mov dl,3
+	mov cl,5
+	mov ax,data
+	mov ds,ax
+	mov si,17
+	call show_str
+	
 	mov ax,4c00h
 	int 21h
 ;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
 ;参数 dh行号 dl列号 cl颜色 ds：si指向字符串的首地址
 show_str:
+	push ax 
 	push bx
-	push dx
-	push cx
-	push ds
+	push es
 	push si
-	push di
-
-	mov bx,0b800h
-;获取偏移量
-	mov ax,
-	mov dx,
 	
-	mov si,
-    mov si,0
-    mov di,0
-s:
+	mov ax,0b800h	
+	mov es,ax	
+ 
+		
+	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
+	mul dl
+	mov bx,ax	;bx保存 dl*2的值
+	mov ax,160
+	mul dh
+	add bx,ax	;bx保存160*dh+ax的值
+
+	mov al,cl
+	mov cl,0
+
 	change:
-	mov al,ds:[si]
-	mov ah,0
+	mov ch,ds:[si]
 	jcxz ok
-	
-	
-	mov es,ax		
 
-	mov bx,0
-	mov si,07c0h	; 80*2*12 + 32*2 从第十二行 32个字符开始
-	mov di,12h
-	
-	loop s
+ 	mov es:[bx],ch
+ 	mov es:[bx+1],al
+ 	add bx,2
+ 	inc si
 	jmp short change
 	
 	ok:
+	pop si
+	pop es
+	pop bx 
+	pop ax
+	ret
+
+code ends
+end start
+```
+
+### s102.asm x
+
+名称：divdw
+
+功能：进行不会产生溢出的除法运算，被除数为dword型，除数为word型，结果为dword型
+
+参数：(ax)=dword型数据的低16位  (dx)=dword型数据的高16位  (cx)=除数
+
+返回(dx)=结果的高16位  (ax)-结果的低16位  (cx)=余数
+
+公式：
+
+X：被除数，范围：[0，FFFFFFFF]
+
+N：除数，范围，[0，FFFF]
+
+H：X高16位，范围[0，FFFF]
+
+L：X低16位，范围[0，FFFF]
+
+int（）：描述性运算符，取商，eg，int（38/10）= 3
+
+rem（）：描述性运算符，取余数，eg，rem（38/10）= 8
+
+X/N = int(H/N)`*`65536 + [rem(H/N)`*`65536+L]/N
+
+eg:计算1000000/10 （f4240h/0ah）=186A0h
+
+```assembly
+assume cs:code
+
+code segment
+start:
+	mov ax,4240h	;L
+	mov dx,000fh	;H
+	mov cx,0ah		;N
+	call divdw
+	
+	mov cx,4c00h
+	int 21h
+;使用div时 做被除数 ax 低位 dx 高位,做结果时,ax 商 dx 余数 
+;int(H/N)*65536 + [rem(H/N)*65536+L]/N
+;参数：(ax)=dword型数据的低16位 (dx)=dword型数据的高16位 (cx)=除数
+;返回：(dx)=结果的高16位 (ax)=结果的低16位 (cx)=余数
+divdw:
+	push ax		;保存被除数低位 L
+	mov ax,dx 	;把被除数高位H赋给ax  相当于先计算H/N
+	mov dx,0	;dx 清零
+	div cx		;H/N,结果 ax 商 ,dx 余数 
+	mov bx,ax 	;保存商 bx = ax int(H/N)
+	pop ax		;取出L 余数做高位rem(H/N)*65536存放在dx中，而上一步中的dx就是余数 低位ax=L
+	div cx		;[rem(H/N)*65536+L]/N
+	mov cx,dx	;保存余数结果
+	mov dx,bx 	;结果高位商 ，ax低位商
+	ret
+
+code ends
+end start
+```
+
+div eg:
+
+```
+100001 = 186A1H
+
+mov ax,86A1H	;低位数据
+mov dx,1	;高位数据
+mov bx,100
+div bx
+结果：商 ax 03e8 余数 dx 1 
+```
+
+### s103.asm
+
+名称：dtoc
+
+功能：将word型数据转变为表示十进制的字符串，字符串以0为结尾符
+
+参数：(ax)=word 型数据  ds:si 指向字符串的首地址
+
+应用举例：编程，将数据1266以十进制的形式在屏幕的8行3列，用绿色显示出来，显示时我们调用本次实验中的第一个子程序show_str
+
+```assembly
+assume cs:code
+data segment
+	db 256 dup(0)
+data ends
+code segment 
+start:
+	
+	mov ax,1263
+	mov si,10
+	call dotc
+	
+	mov dh,9
+	mov dl,3
+	mov cl,2
+	call show_str
+
+	mov ax,12636
+	mov si,25
+	call dotc
+	
+	mov dh,10
+	mov dl,3
+	mov cl,2
+	call show_str
+	
+
+	mov ax,4c00h
+	int 21h
+;参数：(ax)=word 型数据  ds:si 指向字符串的首地址
+dotc:
+	push dx
+	push cx
+	push bx
+	push si
+	push di
+
+	mov di,si 	;保存字符串首地址，后面字符串逆序需要
+	div_loops:
+	mov dx,0 	;作被除数时 高位dx 为0
+	mov bx,10 	;10 作除数
+	div bx		; ax/10 结果：ax 商 dx 余数
+	add dx,30h	;数字转字符
+	mov ds:[si],dx
+	inc si
+	mov cx,ax	
+	jcxz dotc_ok	;判断商为0时结束 即 cx == 0 
+	jmp short div_loops
+	
+	dotc_ok:
+	mov cl,0
+	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+
+	mov dx,0
+	push si 		;保存si 字符串最高位下标
+	sub si,di
+	mov ax,si
+	mov bx,2
+	div bx 			;循环次数=字符串长度/2  
+	mov cx,ax
+	pop si 			;取出si 字符串最高位下标
+	dec si			;字符串最高位下标
+
+	dotc_str_reverse:
+
+	mov al,ds:[di]		;交换
+	mov ah,ds:[si]
+	mov ds:[si],al
+	mov ds:[di],ah
+	inc di
+	dec si
+	dec cx
+	jcxz str_reverse_ok 
+	jmp short dotc_str_reverse
+
+	str_reverse_ok:
 	pop di
 	pop si
-	pop ds
+	pop bx
 	pop cx
 	pop dx
-	pop bx
 	ret
+;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
+;参数 dh行号 dl列号 cl颜色 ds ： si 指向字符串的首地址
+show_str:
+	push ax 
+	push bx
+	push es
+	push si
 	
-cube:
-	mov ax,bx
-	mul bx
-	ret	
+	mov ax,0b800h	
+	mov es,ax	
+ 	
+	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
+	mul dl
+	mov bx,ax	;bx保存 dl*2的值
+	mov ax,160
+	mul dh
+	add bx,ax	;bx保存160*dh+ax的值
+
+	mov al,cl
+	mov cl,0
+
+	change:
+	mov ch,ds:[si]
+	jcxz show_str_ok
+
+ 	mov es:[bx],ch
+ 	mov es:[bx+1],al
+ 	add bx,2
+ 	inc si
+	jmp short change
 	
-	
-	
+	show_str_ok:
+	pop si
+	pop es
+	pop bx 
+	pop ax
+	ret
 code ends
-start end
+end start
 ```
 
 
 
 
 
+## 课程设计1
+
+将dword型数转变为十进制的数据有些已经大于65535，一个编写一个新的数据到字符串转化的子程序，完成dword型数据到字符串的转化
+
+名称：dtoc
+
+功能：将dword型数转变为表示十进制数的字符串，字符串以0为结尾符合
+
+参数：（ax）= dword 型数据的低16位 （dx）= dword型数据的高16位，ds：si指向字符串的首地址
+
+返回：无
+
+### dotc2.asm
+
+```assembly
+assume cs:code
+data segment
+	db 10 dup(0)
+data ends
+code segment 
+start:
+	mov ax,0ffffh
+	mov dx,0ffffh
+	mov bx,data
+	mov ds,bx
+	mov si,0
+	call dotc
+	
+	mov dh,8
+	mov dl,3
+	mov cl,2
+	call show_str
+
+	mov ax,4c00h
+	int 21h
+dotc:
+	push dx
+	push cx
+	push bx
+	push si
+	push di
+
+	div_loops:
+
+	mov cx,10 	;除数 10
+	call divdw 	;dx ax / 10 结果：商dx ax 余数 cx
+	add cx,30h	;余数cx数字转字符
+	mov ds:[si],cx
+	inc si
+	mov cx,ax	 	;低16位ax
+	jcxz dotc_ok	;判断商为0时结束 即 cx == 0 
+	jmp short div_loops
+	
+	dotc_ok:
+	mov cl,0
+	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+
+	cmp si,1     	;只有一个数字字符 直接跳出循环
+	je str_reverse_ok
+
+	mov di,0
+	mov dx,0
+	mov ax,si
+	mov bx,2
+	div bx 			;循环次数=si/2  
+	dec si			;字符串最高位下标
+	mov cx,ax
+
+	dotc_str_reverse:
+
+	mov al,ds:[di]		;交换
+	mov ah,ds:[si]
+	mov ds:[si],al
+	mov ds:[di],ah
+	inc di
+	dec si
+	dec cx
+	jcxz str_reverse_ok 
+	jmp short dotc_str_reverse
+
+	str_reverse_ok:
+	pop di
+	pop si
+	pop bx
+	pop cx
+	pop dx
+	ret
+;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
+;参数 dh行号 dl列号 cl颜色 ds：si指向字符串的首地址
+show_str:
+	push ax 
+	push bx
+	push es
+	push si
+	
+	mov ax,0b800h	
+	mov es,ax	
+ 
+		
+	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
+	mul dl
+	mov bx,ax	;bx保存 dl*2的值
+	mov ax,160
+	mul dh
+	add bx,ax	;bx保存160*dh+ax的值
+
+	mov al,cl
+	mov cl,0
+
+	change:
+	mov ch,ds:[si]
+	jcxz show_str_ok
+
+ 	mov es:[bx],ch
+ 	mov es:[bx+1],al
+ 	add bx,2
+ 	inc si
+	jmp short change
+	
+	show_str_ok:
+	pop si
+	pop es
+	pop bx 
+	pop ax
+	ret
+	
+;使用div时 做被除数 ax 低位 dx 高位,做结果时,ax 商 dx 余数 
+;int(H/N)*65536 + [rem(H/N)*65536+L]/N
+;参数：(ax)=dword型数据的低16位 (dx)=dword型数据的高16位 (cx)=除数
+;返回：(dx)=结果的高16位 (ax)=结果的低16位 (cx)=余数
+divdw:
+	push bx
+	push ax		;保存被除数低位 L
+	mov ax,dx 	;把被除数高位H赋给ax  相当于先计算H/N
+	mov dx,0	;dx 清零
+	div cx		;H/N,结果 ax 商 ,dx 余数 
+	mov bx,ax 	;保存商 bx = ax int(H/N)
+	pop ax		;取出L 余数做高位rem(H/N)*65536存放在dx中，而上一步中的dx就是余数 低位ax=L
+	div cx		;[rem(H/N)*65536+L]/N
+	mov cx,dx	;保存余数结果
+	mov dx,bx 	;结果高位商 ，ax低位商
+	pop bx
+	ret
+	
+code ends
+end start
+```
 
 
 
+### 
+
+![image-20240821180837440](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408211808712.png)
+
+### kcsj1.asm 存在问题
+
+```
+assume cs:codesg
+data segment 
+	db '1975','1976','1977','1978','1979','1980','1981','1983','1983'
+	db '1984','1985','1986','1987','1988','1989','1990','1991','1992'
+	db '1993','1994','1995'
+	dd 16,22,382,1356,2390,8000,16000,24486,50064,97479,140417,197514
+	dd 345980,590827,803530,1183000,1843000,2759000,3753000,4649000,5937000
+	dw 3,7,9,13,28,38,130,220,476,778,1001,1442,2258,2793,4037,5635,8226
+	dw 11542,14430,15257,17800
+data ends
+table segment 
+	db 21 dup ('year summ ne ?? ')
+table ends
+stack segment
+	db 256 dup (0)	
+stack ends
+screen_table_data segment
+    dd 21 dup (0,0,0,0,0,0) ;4个字节年份+ 0 +8个字节总收入+ 0 +4个字节雇员+ 0 +4个字节人均收入+ 0 = 24
+    						; 0-3,0,5-13,0,15-18,0,20-23,0
+screen_table_data ends
+codesg segment
+start:
+	mov ax,data
+	mov ds,ax
+	mov ax,table
+	mov es,ax
+	mov ax,stack
+	mov ss,ax
+	mov sp,64
+
+	mov dx,0
+	mov bx,0
+	mov si,0
+	mov di,0
+	mov bp,0
+	mov cx,21
+;s:	
+	push cx
+	;复制年份
+	mov ax,ds:[di]
+	mov es:[bx],ax
+	mov ax,ds:[di+2]
+	mov es:[bx+2],ax
+	
+    ;复制雇员数
+	mov ax,ds:[si+168]
+	mov es:[bx+10],ax
+	
+	;复制收入
+	mov ax,ds:[di+84]
+	mov es:[bx+5],ax
+	mov dx,ds:[di+86]   ;存储高字节数据
+	mov es:[bx+7],dx
+    ;计算平均收入
+    mov cx,es:[bx+10]
+	call divdw 
+	mov es:[bx+13],ax
+
+	push di
+	push si
+	push ds
+	push bx 	;保存es中的偏移量
+
+    mov ax,screen_table_data
+    mov ds,ax 	;将 screen_table_data 段地址赋值给ds
+    ;复制年份
+    mov si,bx
+	mov ax,es:[bx]
+	mov ds:[bp+si],ax
+	mov ax,es:[bx+2]
+	mov ds:[bp+si+2],ax
+
+	push dx
+	push cx
+	push si
+	;显示年份
+	mov dh,2
+	mov dl,1
+	mov cl,2
+	mov si,0
+	call show_str
+	pop si
+	pop	cx
+	pop dx
+
+	;将雇员 word 型数据转字符串
+    mov ax,3;es:[bx+10] ;取出雇员数据
+    mov si,bp
+    add si,15 	
+    call dotc_word 	;转字符串
+
+    push dx
+	push cx
+	push si
+	mov dh,2
+	mov dl,15
+	mov cl,2
+	mov si,15
+	call show_str
+	pop si
+	pop	cx
+	pop dx
+
+  	mov ax,4c00h
+	int 21h
 
 
+    ;将收入 dword 型数据转字符串
+    mov ax,es:[bx+5]
+    mov dx,es:[bx+7]
+    mov si,bp
+    add si,5
+  	call dotc_dword ;转字符串
 
 
+  	;将平均收入 word 型数据转字符串  
+    mov ax,es:[bx+13]
+  	mov si,bp
+    add si,20 	 
+    call dotc_word 	;转字符串
+
+    
+	add bp,24
+
+	pop cx
+    pop bx
+    pop ds
+    pop si
+    pop di
+
+	add si,2 	;控制雇员数
+	add di,4 	;控制收入、年份
+	add bx,16 	;控制结构体数组成员
+	;loop s
+
+	mov ax,4c00h
+	int 21h
+
+	mov cx,21
+;show_loops:   
+	mov ax,screen_table_data
+    mov ds,ax 	;将 screen_table_data 段地址赋值给ds 
+    ;显示年份
+	mov di,0
+	mov dh,1
+	mov dl,1
+	mov cl,2
+	mov si,0
+	call show_str
+
+    ;显示收入
+    mov ax,es:[di+5]
+    mov dx,es:[di+7]
+    mov si,5
+    call dotc_dword     ;需要di si指向字符串的首地址
+    mov dh,1
+    mov dl,9
+    mov cl,2
+    mov si,5    
+    call show_str
+
+    ;显示雇员数
+    mov ax,es:[di+10]
+    mov si,10
+    call dotc_word
+    mov dh,1
+    mov dl,17
+    mov cl,2
+    mov si,15
+    call show_str
 
 
+    ;显示平均收入
+    mov ax,es:[di+13]
+    mov si,13
+    call dotc_word
+    mov dh,1
+    mov dl,25
+    mov cl,2
+    mov si,20
+    call show_str
+
+	mov cx,4c00h
+	int 21h
 
 
+;将dword数据变为表示十进制的字符串，字符串以0为结尾符合
+;参数：（ax）= dword型数据的低16位 （dx）=dword型数据的高16位 di：si指向字符串的首地址
+dotc_dword:
+	push dx
+	push cx
+	push bx
+	push si
+	push di
+
+	dotc_dword_div_loops:
+
+	mov cx,10 	;除数 10
+	call divdw 	;dx ax / 10 结果：商dx ax 余数 cx
+	add cx,30h	;余数cx数字转字符
+	mov ds:[si],cx
+	inc si
+	mov cx,ax	 	;低16位ax
+	jcxz dotc_dword_ok	;判断商为0时结束 即 cx == 0 
+	jmp short dotc_dword_div_loops
+	
+	dotc_dword_ok:
+	mov cl,0
+	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+
+	cmp si,1     	;只有一个数字字符 直接跳出循环
+	je dotc_dword_str_reverse_ok
+
+	mov di,0
+	mov dx,0
+	mov ax,si
+	mov bx,2
+	div bx 			;循环次数=si/2  
+	dec si
+	mov cx,ax
+
+	dotc_dword_str_reverse:
+
+	mov al,ds:[di]		;交换
+	mov ah,ds:[si]
+	mov ds:[si],al
+	mov ds:[di],ah
+	inc di
+	dec si
+	dec cx
+	jcxz dotc_dword_str_reverse_ok 
+	jmp short dotc_dword_str_reverse
+
+	dotc_dword_str_reverse_ok:
+	pop di
+	pop si
+	pop bx
+	pop cx
+	pop dx
+	ret
+
+;功能：将word型数据转变为表示十进制的字符串，字符串以0为结尾符。
+;参数：(ax)=word型数据 ds:si指向字符串的首地址
+dotc_word:
+	push dx
+	push cx
+	push bx
+	push si
+	push di
+
+	dotc_word_div_loops:
+	mov dx,0 	;作被除数时 高位dx 为0
+	mov bx,10 	;10 作除数
+	div bx		; ax/10 结果：ax 商 dx 余数
+	add dx,30h	;数字转字符
+	mov ds:[si],dx
+	inc si
+	mov cx,ax	
+	jcxz dotc_word_ok	;判断商为0时结束 即 cx == 0 
+	jmp short dotc_word_div_loops
+	
+	dotc_word_ok:
+	mov cl,0
+	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+
+	mov di,0
+	mov dx,0
+	mov ax,si
+	mov bx,2
+	div bx 			;循环次数=si/2  
+	dec si			;字符串最高位下标
+	mov cx,ax
+
+	dotc_word_str_reverse:
+
+	mov al,ds:[di]		;交换
+	mov ah,ds:[si]
+	mov ds:[si],al
+	mov ds:[di],ah
+	inc di
+	dec si
+	dec cx
+	jcxz dotc_word_str_reverse_ok 
+	jmp short dotc_word_str_reverse
+
+	dotc_word_str_reverse_ok:
+	pop di
+	pop si
+	pop bx
+	pop cx
+	pop dx
+	ret
 
 
+;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
+;参数 dh行号 dl列号 cl颜色 ds：si指向字符串的首地址
+show_str:
+	push ax 
+	push bx
+	push es
+	push si
+	
+	mov ax,0b800h	
+	mov es,ax	
+ 
+		
+	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
+	mul dl
+	mov bx,ax	;bx保存 dl*2的值
+	mov ax,160
+	mul dh
+	add bx,ax	;bx保存160*dh+ax的值
+
+	mov al,cl
+	mov cl,0
+
+	change:
+	mov ch,ds:[si]
+	jcxz show_str_ok
+
+ 	mov es:[bx],ch
+ 	mov es:[bx+1],al
+ 	add bx,2
+ 	inc si
+	jmp short change
+	
+	show_str_ok:
+	pop si
+	pop es
+	pop bx 
+	pop ax
+	ret
+	
+;使用div时 做被除数 ax 低位 dx 高位,做结果时,ax 商 dx 余数 
+;int(H/N)*65536 + [rem(H/N)*65536+L]/N
+;参数：(ax)=dword型数据的低16位 (dx)=dword型数据的高16位 (cx)=除数
+;返回：(dx)=结果的高16位 (ax)=结果的低16位 (cx)=余数
+divdw:
+	push bx
+	push ax		;保存被除数低位 L
+	mov ax,dx 	;把被除数高位H赋给ax  相当于先计算H/N
+	mov dx,0	;dx 清零
+	div cx		;H/N,结果 ax 商 ,dx 余数 
+	mov bx,ax 	;保存商 bx = ax int(H/N)
+	pop ax		;取出L 余数做高位rem(H/N)*65536存放在dx中，而上一步中的dx就是余数 低位ax=L
+	div cx		;[rem(H/N)*65536+L]/N
+	mov cx,dx	;保存余数结果
+	mov dx,bx 	;结果高位商 ，ax低位商
+	pop bx
+	ret
 
 
+codesg ends
+end start
+```
 
 
 
