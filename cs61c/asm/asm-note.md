@@ -2126,10 +2126,12 @@ data segment
 data ends
 code segment 
 start:
-	
-	mov ax,1263
+    mov ax,data
+    mov ds,ax
+
+	mov ax,1
 	mov si,10
-	call dotc
+	call dotc_word
 	
 	mov dh,9
 	mov dl,3
@@ -2138,18 +2140,18 @@ start:
 
 	mov ax,12636
 	mov si,25
-	call dotc
+	call dotc_word
 	
 	mov dh,10
 	mov dl,3
 	mov cl,2
 	call show_str
 	
-
 	mov ax,4c00h
 	int 21h
-;参数：(ax)=word 型数据  ds:si 指向字符串的首地址
-dotc:
+;功能：将word型数据转变为表示十进制的字符串，字符串以0为结尾符。
+;参数：(ax)=word型数据 ds:si指向字符串的首地址
+dotc_word:
 	push dx
 	push cx
 	push bx
@@ -2157,32 +2159,37 @@ dotc:
 	push di
 
 	mov di,si 	;保存字符串首地址，后面字符串逆序需要
-	div_loops:
-	mov dx,0 	;作被除数时 高位dx 为0
-	mov bx,10 	;10 作除数
-	div bx		; ax/10 结果：ax 商 dx 余数
-	add dx,30h	;数字转字符
+	dotc_word_div_loops:
+	mov dx,0 		;作被除数时 高位dx 为0
+	mov bx,10 		;10 作除数
+	div bx			; ax/10 结果：ax 商 dx 余数
+	add dx,30h		;数字转字符
 	mov ds:[si],dx
 	inc si
 	mov cx,ax	
-	jcxz dotc_ok	;判断商为0时结束 即 cx == 0 
-	jmp short div_loops
+	jcxz dotc_word_ok	;判断商为0时结束 即 cx == 0 
+	jmp short dotc_word_div_loops
 	
-	dotc_ok:
+	dotc_word_ok:
 	mov cl,0
-	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+	mov ds:[si],cl	;字符串结尾为0    需要逆序
 
 	mov dx,0
 	push si 		;保存si 字符串最高位下标
-	sub si,di
+	sub si,di       ;字符串长度=最高位下标-初始首地址
+
+	mov cx,si
+	sub cx,1 		;只有一个数字字符 直接退出不需要逆序   	
+	jcxz dotc_word_str_ok
+
 	mov ax,si
 	mov bx,2
 	div bx 			;循环次数=字符串长度/2  
 	mov cx,ax
-	pop si 			;取出si 字符串最高位下标
+	pop si 			;取出si 字符串最高位0下标
 	dec si			;字符串最高位下标
 
-	dotc_str_reverse:
+	dotc_word_str_reverse:
 
 	mov al,ds:[di]		;交换
 	mov ah,ds:[si]
@@ -2191,16 +2198,19 @@ dotc:
 	inc di
 	dec si
 	dec cx
-	jcxz str_reverse_ok 
-	jmp short dotc_str_reverse
+	jcxz dotc_word_str_reverse_ok 
+	jmp short dotc_word_str_reverse
 
-	str_reverse_ok:
+	dotc_word_str_ok:
+	pop si 	
+	dotc_word_str_reverse_ok:
 	pop di
 	pop si
 	pop bx
 	pop cx
 	pop dx
 	ret
+
 ;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
 ;参数 dh行号 dl列号 cl颜色 ds ： si 指向字符串的首地址
 show_str:
@@ -2208,7 +2218,7 @@ show_str:
 	push bx
 	push es
 	push si
-	
+
 	mov ax,0b800h	
 	mov es,ax	
  	
@@ -2222,7 +2232,7 @@ show_str:
 	mov al,cl
 	mov cl,0
 
-	change:
+	show_str_loops:
 	mov ch,ds:[si]
 	jcxz show_str_ok
 
@@ -2230,7 +2240,8 @@ show_str:
  	mov es:[bx+1],al
  	add bx,2
  	inc si
-	jmp short change
+
+	jmp short show_str_loops
 	
 	show_str_ok:
 	pop si
@@ -2238,6 +2249,7 @@ show_str:
 	pop bx 
 	pop ax
 	ret
+
 code ends
 end start
 ```
@@ -2263,7 +2275,7 @@ end start
 ```assembly
 assume cs:code
 data segment
-	db 10 dup(0)
+	db 24 dup(0)
 data ends
 code segment 
 start:
@@ -2272,23 +2284,35 @@ start:
 	mov bx,data
 	mov ds,bx
 	mov si,0
-	call dotc
+	call dotc_dword
 	
 	mov dh,8
 	mov dl,3
 	mov cl,2
 	call show_str
 
+	mov ax,0ffffh
+	mov dx,0ff1fh
+	mov si,10
+	call dotc_dword
+	
+	mov dh,9
+	mov dl,3
+	mov cl,8
+	call show_str
+
 	mov ax,4c00h
 	int 21h
-dotc:
+
+dotc_dword:
 	push dx
 	push cx
 	push bx
 	push si
 	push di
 
-	div_loops:
+	mov di,si 	;保存字符串首地址，后面字符串逆序需要
+	dotc_dword_div_loops:
 
 	mov cx,10 	;除数 10
 	call divdw 	;dx ax / 10 结果：商dx ax 余数 cx
@@ -2296,25 +2320,30 @@ dotc:
 	mov ds:[si],cx
 	inc si
 	mov cx,ax	 	;低16位ax
-	jcxz dotc_ok	;判断商为0时结束 即 cx == 0 
-	jmp short div_loops
+	jcxz dotc_dword_ok	;判断商为0时结束 即 cx == 0 
+	jmp short dotc_dword_div_loops
 	
-	dotc_ok:
+	dotc_dword_ok:
 	mov cl,0
-	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
+	mov ds:[si],cl	;字符串结尾为0    data中的数据 需要逆序
 
-	cmp si,1     	;只有一个数字字符 直接跳出循环
-	je str_reverse_ok
 
-	mov di,0
 	mov dx,0
+	push si 		;保存si 字符串最高位0下标
+	sub si,di       ;字符串长度=最高位下标-初始首地址
+
+	mov cx,si
+	sub cx,1 		;只有一个数字字符 直接退出不需要逆序   	
+	jcxz dotc_dword_str_ok
+
 	mov ax,si
 	mov bx,2
-	div bx 			;循环次数=si/2  
+	div bx 			;循环次数=字符串长度/2  
+	mov cx,ax 		;循环次数
+	pop si 			;取出si 字符串最高位0下标
 	dec si			;字符串最高位下标
-	mov cx,ax
 
-	dotc_str_reverse:
+	dotc_dword_str_reverse:
 
 	mov al,ds:[di]		;交换
 	mov ah,ds:[si]
@@ -2323,16 +2352,20 @@ dotc:
 	inc di
 	dec si
 	dec cx
-	jcxz str_reverse_ok 
-	jmp short dotc_str_reverse
+	jcxz dotc_dword_str_reverse_ok 
+	jmp short dotc_dword_str_reverse
 
-	str_reverse_ok:
+	dotc_dword_str_ok:
+	pop si 
+	dotc_dword_str_reverse_ok:
 	pop di
 	pop si
 	pop bx
 	pop cx
 	pop dx
 	ret
+
+
 ;功能 在屏幕 指定位置 用指定颜色 显示一个以0结尾的字符串
 ;参数 dh行号 dl列号 cl颜色 ds：si指向字符串的首地址
 show_str:
@@ -2344,7 +2377,6 @@ show_str:
 	mov ax,0b800h	
 	mov es,ax	
  
-		
 	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
 	mul dl
 	mov bx,ax	;bx保存 dl*2的值
@@ -2396,11 +2428,9 @@ end start
 
 
 
-### 
-
 ![image-20240821180837440](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408211808712.png)
 
-### kcsj1.asm 存在问题
+### kcsj1.asm 
 
 ```
 assume cs:codesg
@@ -2420,7 +2450,7 @@ stack segment
 	db 256 dup (0)	
 stack ends
 screen_table_data segment
-    dd 21 dup (0,0,0,0,0,0) ;4个字节年份+ 0 +8个字节总收入+ 0 +4个字节雇员+ 0 +4个字节人均收入+ 0 = 24
+    db 512 dup (0) ;4个字节年份+ 0 +8个字节总收入+ 0 +4个字节雇员+ 0 +4个字节人均收入+ 0 = 24
     						; 0-3,0,5-13,0,15-18,0,20-23,0
 screen_table_data ends
 codesg segment
@@ -2431,7 +2461,7 @@ start:
 	mov es,ax
 	mov ax,stack
 	mov ss,ax
-	mov sp,64
+	mov sp,256
 
 	mov dx,0
 	mov bx,0
@@ -2439,165 +2469,116 @@ start:
 	mov di,0
 	mov bp,0
 	mov cx,21
-;s:	
-	push cx
+s:	
 	;复制年份
 	mov ax,ds:[di]
 	mov es:[bx],ax
 	mov ax,ds:[di+2]
 	mov es:[bx+2],ax
 	
-    ;复制雇员数
+	;复制雇员数
 	mov ax,ds:[si+168]
 	mov es:[bx+10],ax
-	
-	;复制收入
+
+	;复制总收入
 	mov ax,ds:[di+84]
 	mov es:[bx+5],ax
-	mov dx,ds:[di+86]   ;存储高字节数据
+	mov dx,ds:[di+86] ;存储高字节数据
 	mov es:[bx+7],dx
-    ;计算平均收入
-    mov cx,es:[bx+10]
-	call divdw 
-	mov es:[bx+13],ax
 
-	push di
-	push si
-	push ds
-	push bx 	;保存es中的偏移量
-
-    mov ax,screen_table_data
-    mov ds,ax 	;将 screen_table_data 段地址赋值给ds
-    ;复制年份
-    mov si,bx
-	mov ax,es:[bx]
-	mov ds:[bp+si],ax
-	mov ax,es:[bx+2]
-	mov ds:[bp+si+2],ax
-
-	push dx
+	;计算平均收入
 	push cx
-	push si
-	;显示年份
-	mov dh,2
-	mov dl,1
-	mov cl,2
-	mov si,0
-	call show_str
-	pop si
-	pop	cx
-	pop dx
-
-	;将雇员 word 型数据转字符串
-    mov ax,3;es:[bx+10] ;取出雇员数据
-    mov si,bp
-    add si,15 	
-    call dotc_word 	;转字符串
-
-    push dx
-	push cx
-	push si
-	mov dh,2
-	mov dl,15
-	mov cl,2
-	mov si,15
-	call show_str
-	pop si
-	pop	cx
-	pop dx
-
-  	mov ax,4c00h
-	int 21h
-
-
-    ;将收入 dword 型数据转字符串
-    mov ax,es:[bx+5]
-    mov dx,es:[bx+7]
-    mov si,bp
-    add si,5
-  	call dotc_dword ;转字符串
-
-
-  	;将平均收入 word 型数据转字符串  
-    mov ax,es:[bx+13]
-  	mov si,bp
-    add si,20 	 
-    call dotc_word 	;转字符串
-
-    
-	add bp,24
-
+	mov cx,es:[bx+10] 
+	call divdw 		 ;收入/人数
 	pop cx
-    pop bx
-    pop ds
-    pop si
-    pop di
+	mov es:[bx+13],ax
 
 	add si,2 	;控制雇员数
 	add di,4 	;控制收入、年份
 	add bx,16 	;控制结构体数组成员
-	;loop s
+	loop s
 
-	mov ax,4c00h
-	int 21h
-
-	mov cx,21
-;show_loops:   
-	mov ax,screen_table_data
-    mov ds,ax 	;将 screen_table_data 段地址赋值给ds 
-    ;显示年份
-	mov di,0
-	mov dh,1
-	mov dl,1
-	mov cl,2
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	mov dx,0
+	mov bx,0
 	mov si,0
+	mov bp,0
+	mov di,0 ;控制行数
+    mov ax,screen_table_data
+    mov ds,ax 	;将 screen_table_data 段地址赋值给ds
+
+    mov cx,21
+show_loops:
+    ;从table中复制年份
+    mov si,bp
+	mov ax,es:[bx]
+	mov ds:[bp],ax
+	mov ax,es:[bx+2]
+	mov ds:[bp+2],ax
+	;显示年份
+	mov ax,di ;控制行数
+	mov dh,al
+	mov dl,1
+
+	mov cl,2
 	call show_str
 
-    ;显示收入
-    mov ax,es:[di+5]
-    mov dx,es:[di+7]
-    mov si,5
-    call dotc_dword     ;需要di si指向字符串的首地址
-    mov dh,1
-    mov dl,9
-    mov cl,2
-    mov si,5    
-    call show_str
+    ;从table中获取总收入 dword 型数据然后转字符串
+    mov ax,es:[bx+5]
+    mov dx,es:[bx+7]
+    add si,5 		;si向后偏移5
+  	call dotc_dword ;转字符串
+  	;显示总收入
+  	mov ax,di ;控制行数
+  	mov dh,al
+	mov dl,11
+	mov cl,2
+	call show_str
 
-    ;显示雇员数
-    mov ax,es:[di+10]
-    mov si,10
-    call dotc_word
-    mov dh,1
-    mov dl,17
-    mov cl,2
-    mov si,15
-    call show_str
+	;将雇员 word 型数据转字符串
+    mov ax,es:[bx+10] ;取出雇员数据
+    add si,9 		;si向后偏移9
+    call dotc_word 	;转字符串
+    ;显示将雇员数
+	mov ax,di ;控制行数
+  	mov dh,al
+	mov dl,21
+	mov cl,2
+	call show_str
 
-
+  	;将平均收入 word 型数据转字符串  
+    mov ax,es:[bx+13]
+    add si,5 	   	;si向后偏移5
+    call dotc_word 	;转字符串
     ;显示平均收入
-    mov ax,es:[di+13]
-    mov si,13
-    call dotc_word
-    mov dh,1
-    mov dl,25
-    mov cl,2
-    mov si,20
-    call show_str
+    mov ax,di ;控制行数
+  	mov dh,al
+	mov dl,31
+	mov cl,2
+	call show_str
 
-	mov cx,4c00h
-	int 21h
+	inc di
+	add bx,16 	;控制table中的偏移
+	add bp,24 	;控制screen_table_data中的偏移量
+	
+	loop show_loops
+
+	mov ax,4c00h
+	int 21h	
+
 
 
 ;将dword数据变为表示十进制的字符串，字符串以0为结尾符合
 ;参数：（ax）= dword型数据的低16位 （dx）=dword型数据的高16位 di：si指向字符串的首地址
 dotc_dword:
-	push dx
-	push cx
+	push ax
 	push bx
+	push cx
+	push dx
 	push si
 	push di
 
+	mov di,si 	;保存字符串首地址，后面字符串逆序需要
 	dotc_dword_div_loops:
 
 	mov cx,10 	;除数 10
@@ -2613,16 +2594,18 @@ dotc_dword:
 	mov cl,0
 	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
 
-	cmp si,1     	;只有一个数字字符 直接跳出循环
-	je dotc_dword_str_reverse_ok
-
-	mov di,0
 	mov dx,0
+	push si 		;保存si 字符串最高位0下标
+	sub si,di       ;字符串长度=最高位下标-初始首地址
+	mov cx,si
+	sub cx,1 		;只有一个数字字符 直接退出不需要逆序   	
+	jcxz dotc_dword_str_ok
 	mov ax,si
 	mov bx,2
-	div bx 			;循环次数=si/2  
-	dec si
-	mov cx,ax
+	div bx 			;循环次数=字符串长度/2  
+	mov cx,ax 		;循环次数
+	pop si 			;取出si 字符串最高位0下标
+	dec si			;字符串最高位下标
 
 	dotc_dword_str_reverse:
 
@@ -2635,49 +2618,60 @@ dotc_dword:
 	dec cx
 	jcxz dotc_dword_str_reverse_ok 
 	jmp short dotc_dword_str_reverse
-
+	dotc_dword_str_ok:
+ 	pop si 
 	dotc_dword_str_reverse_ok:
 	pop di
 	pop si
-	pop bx
-	pop cx
 	pop dx
+	pop cx
+	pop bx
+	pop ax
 	ret
+
 
 ;功能：将word型数据转变为表示十进制的字符串，字符串以0为结尾符。
 ;参数：(ax)=word型数据 ds:si指向字符串的首地址
 dotc_word:
-	push dx
-	push cx
+	push ax
 	push bx
+	push cx
+	push dx
 	push si
 	push di
 
-	dotc_word_div_loops:
-	mov dx,0 	;作被除数时 高位dx 为0
-	mov bx,10 	;10 作除数
-	div bx		; ax/10 结果：ax 商 dx 余数
-	add dx,30h	;数字转字符
+	mov di,si 	;保存字符串首地址，后面字符串逆序需要
+dotc_word_div_loops:
+	mov dx,0 		;作被除数时 高位dx 为0
+	mov bx,10d 		;10 作除数  d表示十进制
+	div bx			; ax/10 结果：ax 商 dx 余数
+	add dx,30h		;数字转字符
 	mov ds:[si],dx
 	inc si
-	mov cx,ax	
+	mov cx,ax	   		;商赋值给cx
 	jcxz dotc_word_ok	;判断商为0时结束 即 cx == 0 
 	jmp short dotc_word_div_loops
 	
-	dotc_word_ok:
+dotc_word_ok:
 	mov cl,0
 	mov ds:[si],cl	;字符串结尾为0    data中的数据为66621 需要逆序
 
-	mov di,0
 	mov dx,0
+	push si 		;保存si 字符串最高位下标
+	sub si,di       ;字符串长度=最高位下标-初始首地址
+
+	mov cx,si
+	sub cx,1     	;只有一个数字字符 直接跳出循环
+	jcxz dotc_word_str_ok
+
 	mov ax,si
 	mov bx,2
-	div bx 			;循环次数=si/2  
-	dec si			;字符串最高位下标
+	div bx 			;循环次数=字符串长度/2  
 	mov cx,ax
+	pop si 			;取出si 字符串最高位0下标
+	dec si			;字符串最高位下标
 
-	dotc_word_str_reverse:
-
+dotc_word_str_reverse:
 	mov al,ds:[di]		;交换
 	mov ah,ds:[si]
 	mov ds:[si],al
@@ -2687,12 +2681,14 @@ dotc_word:
 	dec cx
 	jcxz dotc_word_str_reverse_ok 
 	jmp short dotc_word_str_reverse
-
-	dotc_word_str_reverse_ok:
+dotc_word_str_ok:
+	pop si 	
+dotc_word_str_reverse_ok:
 	pop di
 	pop si
-	pop bx
+	pop ax
 	pop cx
+	pop bx
 	pop dx
 	ret
 
@@ -2702,13 +2698,13 @@ dotc_word:
 show_str:
 	push ax 
 	push bx
+	push cx
 	push es
 	push si
-	
+
 	mov ax,0b800h	
 	mov es,ax	
  
-		
 	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
 	mul dl
 	mov bx,ax	;bx保存 dl*2的值
@@ -2732,6 +2728,7 @@ show_str:
 	show_str_ok:
 	pop si
 	pop es
+	pop cx
 	pop bx 
 	pop ax
 	ret
