@@ -2432,7 +2432,7 @@ end start
 
 ### kcsj1.asm 
 
-```
+```assembly
 assume cs:codesg
 data segment 
 	db '1975','1976','1977','1978','1979','1980','1981','1983','1983'
@@ -2503,12 +2503,13 @@ s:
 	mov bx,0
 	mov si,0
 	mov bp,0
-	mov di,0 ;控制行数
+	mov di,2 	;从第二行开始 
     mov ax,screen_table_data
     mov ds,ax 	;将 screen_table_data 段地址赋值给ds
 
     mov cx,21
 show_loops:
+	push cx
     ;从table中复制年份
     mov si,bp
 	mov ax,es:[bx]
@@ -2557,10 +2558,10 @@ show_loops:
 	mov cl,2
 	call show_str
 
-	inc di
+	inc di 		;控制行数
 	add bx,16 	;控制table中的偏移
 	add bp,24 	;控制screen_table_data中的偏移量
-	
+	pop cx
 	loop show_loops
 
 	mov ax,4c00h
@@ -2758,11 +2759,144 @@ end start
 
 
 
+![image-20240826111750601](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408261117739.png)
+
+# 第十一章标志寄存器
+
+8086cpu内部的寄存器中，有一个16位`flag`标志寄存器（`存储的信息`通常被称为程序状态字`PSW`）
+
+![image-20240826112301820](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408261123933.png)
+
+## 1.ZF标志——零标志位
+
+ZF是flag的第6位，零标志位，记录相关指令执行后，其结果是否为0
+
+eg：
+
+```assembly
+mov ax,1
+sub ax,1
+;执行后结果为0 zf=1
+mov ax,2
+sub ax,1
+;执行后结果为1 zf=0
+```
 
 
 
+## 2.PF标志——奇偶标志位
+
+PF是flag的第2位，奇偶标志位，记录相关指令执行后，其结果的所有bit位中1的个数是否为偶数。如果1的个数为偶数，pf=1；如果为奇数，pf=0
+
+eg：
+
+```assembly
+mov al,1
+add al,10
+;执行后 结果00001011B 其中有3（奇数）个1，则pf=0
+mov al,1
+or al,2
+;执行后 结果00000011B其中有2 （偶数）个1，则pf=1
+```
+
+## 3.SF标志——符号标志位
+
+SF是flag的低7位，符号标志位，记录相关指令执行后，其结果是否为负。如果结果为负，sf=1；如果非负，sf=0
+
+eg：
+
+```assembly
+00000001B 	;可以看作无符号数 1 ，或者有符号数+1
+10000001B	;可以看作无符号数129，也可以看作有符合-127
+```
+
+### 注意：
+
+​	指令的执行会影响标志寄存器的指令有 **add、sub、mul、div、inc、or、and**
+
+​	指令执行对标志寄存器没有影响的指令有 **mov、push、pop**
+
+## 检测点11.1
+
+写出下面每条指令执行后，ZF、PF、SF等标志位的值
+
+sub al,al		;ZF=1 PF=1 SF=0	;结果0b 1 1 0 0为0个1
+
+mov al,1		;ZF=1 PF=1 SF=0 	;不影响
+
+push ax		;ZF=1 PF=1 SF=0 	;不影响
+
+pop bx			;ZF=1PF=1 SF=0	;不影响
+
+add al,bl		;ZF=0 PF=0 SF=0  	;1+1 2 10b
+
+add al,10		;ZF=0 PF=1 SF=0 	;12  1100b  	010
+
+mul al			 ;ZF=0 PF=1 SF=0 	;12*12=144  1001 0000    010
 
 
+
+## 4.CF标志——进位标志
+
+flag的第0位是CF，进位标志，在进行`无符号数`运算时，它记录了运算结果的最高有效位向更高的进位值，或从更高的借位值
+
+eg：
+
+```assembly
+mov al,98H
+add al,al		;执行后(al)=30h cf=1 cf记录了从最高有效位向更高的进位值 98h+98h = 0001 0011 0000 超过8位需要进位, (al)=00110000=30h cf=1
+add al,al		;执行后(al)=60h cf=0 cf记录了从最高有效位向更高的进位值
+
+mov al,97h
+sub al,98h		;执行后; al=ffh cf=1	
+sub al,al		;执行后 al=0 cf=0
+```
+
+## 5.OF标志——溢出标志位
+
+flag的第11位是OF，溢出标志位，OF记录了有`符号数运算的结果`是否发生了溢出。如果发生了溢出，OF=1，如果没有,OF=0
+
+8位有符号数据所能表示的范围：`-128~127`
+
+1000 0000 ~ 0111 1111
+
+16位的有符号数据所能表示的范围：`-32768~32767`
+
+## 检查点11.2 
+
+写出下面每条指令执行后，ZF、PF、SF、CF、OF等标志位的值
+
+```assembly
+				CF		OF		SF		ZF		PF
+sub al,al 		 0		 0		 0	 	 1 		 1
+mov al,10h	 	 0 		 0		 0		 1		 1
+add al,90h 		 0		 0 		 1 		 0 		 1  
+mov al,80h 		 0 	  	 0 		 1        0        1
+add al,80h        1       1       0        1        1
+mov al,0FCh       1       1       0        1        1
+add al,05h        1       0       0        0         0          fc+5=101 0001 0000 0001                                                   
+mov al,7dh       1        0       0        0         0
+add al,0bh       0        1       1        0         1 ;7d+b 有符号 125+11=136 溢出 无符号 =88h，无进位，结果al最高位为1表示负数
+```
+
+## 6.adc指令
+
+adc是带进位的加法指令，利用cf位上记录的进位值
+
+```
+adc ax,bx  ;实现的是(ax)=(ax)+(bx)+CF
+类似于
+add al,bl
+adc ah,bh
+```
+
+eg
+
+```
+mov ax,1
+add ax,ax
+adc ax,3
+```
 
 
 
