@@ -801,6 +801,10 @@ end start
 
 # 第七章
 
+ascii字母表
+
+![image-20240829162511552](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291625605.png)
+
 ![image-20240816164850682](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408161648751.png)
 
 ```assembly
@@ -2883,7 +2887,7 @@ add al,0bh       0        1       1        0         1 ;7d+b 有符号 125+11=13
 
 adc是带进位的加法指令，利用cf位上记录的进位值
 
-```
+```assembly
 adc ax,bx  ;实现的是(ax)=(ax)+(bx)+CF
 类似于
 add al,bl
@@ -2892,10 +2896,347 @@ adc ah,bh
 
 eg
 
-```
+```assembly
+sub ax,ax		; CF=0
 mov ax,1
 add ax,ax
-adc ax,3
+adc ax,3 		;(ax)=(ax)+3+CF=2+3+0
+```
+
+## 7.sbb指令
+
+sbb是带借位减法指令，它利用了CF位上记录的借位值
+
+```assembly
+sbb ax,bx ;实现的功能是： (ax)=(ax)-(bx)-CF	
+```
+
+eg:
+
+计算003E1000H-00202000H结果放在ax bx中
+
+```assembly
+mov bx,1000H
+mov ax,003EH
+sub bx,2000H
+sbb ax,0020H
+```
+
+## 8.cmp命令
+
+cmp是比较命令，cmp的功能相当于减法指令，只是结果保存在标志寄存器中
+
+从标志位的值来看比较结果
+
+```assembly
+cmp ax,bx
+```
+
+![image-20240829144702308](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291447464.png)
+
+![image-20240829144714211](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291447264.png)
+
+eg:
+
+```
+mov ax,8
+mov bx,3
+cmp ax,bx   ;(ax)=8, zf=0, pf=1, sf=0, cf=0, of=0
+```
+
+## 9.检测比较结果的条件转移指令
+
+![image-20240829145133526](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291451620.png)
+
+## 检测点11.3 x
+
+统计F000：0处32个字节中，大小在[32，128]的数据的个数
+
+```assembly
+    mov ax,0f000h
+    mov ds,ax
+
+    mov bx,0
+    mov dx,0
+    mov cx,32
+s:
+	mov al,[bx]
+	cmp al,32
+	jb s0 		;小于
+	cmp al,128
+	ja s0 		;大于
+	inc dx  	;保存结果
+s0:
+	inc bx
+	loop s
+```
+
+统计F000：0处32个字节中，大小在(32,128)的数据的个数
+
+```assembly
+    mov ax,0f000h
+    mov ds,ax
+
+    mov bx,0
+    mov dx,0
+    mov cx,32
+s:
+	mov al,[bx]
+	cmp al,32
+	jna s0 		;小于等于
+	cmp al,128
+	jnb s0 		;大于等于
+	inc dx
+s0:
+	inc bx
+	loop s
+```
+
+## 10.DF标志和串传送指令
+
+flag 的第10位是DF，方向标志位。在串处理指令中，控制每次操作后si、di的增减。
+
+df=0 每次si、di递增
+
+df=1 每次si、di递减
+
+```assembly
+movsb 	;功能是将ds:si指向的内存单元中的字节送入es:di中,根据df位判断si和di递增1 或递减1
+;((es)*16+(di))=((ds)*16+(si))
+;如果df = 0, (si)=(si)+1, (di)=(di)+1
+;如果df = 1, (si)=(si)-1, (di)=(di)-1
+
+movsw ;功能是将ds:si指向的内存单元中的字送入es:di中,根据df位判断si和di递增2 或递减2
+
+
+rep movsb 
+;相当于
+s: 	movsb
+	loop s
+;都需要根据cx来控制次数
+```
+
+`cld`指令；将标志位寄存器的`df位`置`0`
+
+`std`指令；将标志位寄存器的`df位`置`1`
+
+eg:
+
+将data段中的第一个字符串复制到它后面的空间中
+
+```assembly
+data segment
+	db 'Welcome to asm!'
+	db 16 dup(0)
+data ends
+
+start:
+	mov ax,data
+	mov ds,ax
+	mov si,0
+	mov es,ax
+	mov di,16
+	mov cx,16    ;rep 循环16次
+	cld 		;设置df=0 正向传输
+	rep movsb
+	
+end start
+```
+
+## 11.pushf和popf
+
+pushf的功能是将`标志寄存器`的值压栈，而popf是将标志寄存器的值弹出数据，`送入标志寄存器`
+
+## 检测点11.4
+
+下面程序执行后：(ax)=?
+
+0000 of df if tf sf zf 0 af 0 pf 0 cf
+
+```assembly
+mov ax,0
+push ax
+popf
+mov ax,0fff0h ;ax fff0h
+add ax,0010h  ;fff0 + 0010 = 1 0000
+pushf
+pop ax ;of=1, df=0, if=0, sf=0, zf=1, af=0, pf=1, cf=1
+	   ;0000100 01000101
+and al,11000101B
+and ah,00001000B
+;ax=01000101B = 69 = 45h
+```
+
+## 12.标志寄存器在Debug中的表示
+
+![image-20240829155135764](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291551831.png)
+
+## 实验11 编写子程序小写变大写
+
+### t11.asm
+
+编写一个子程序，包含任意字符，以0结尾的字符串中的小写字母变成大写字母，描述如下。
+
+名称：letterc
+
+功能：将以0结尾的字符串中的小写字母变成大写字母
+
+参数：ds:si指向的字符串首地址
+
+```assembly
+assume cs:codesg
+datasg segment
+	db "Beginning's All-purpose Symbolic Instruction Code.",0
+datasg ends
+codesg segment
+begin:
+	mov ax,datasg
+	mov ds,ax
+	mov si,0
+	call letterc
+	
+	mov ax,4c00h
+	int 21h
+;将以0结尾的字符串中的小写字母变成大写字母
+;参数ds:si指向的字符串首地址
+letterc:
+	push ax
+	push bx
+	push cx
+	push dx
+	push si
+	pushf
+	
+	mov ax,0
+	push ax
+	popf 
+	mov si,0
+	mov cl,0
+letterc_loops:
+	mov ch,ds:[si]
+	jcxz letterc_loops_ok
+	;如果ch是小写字符,[97,122]
+	cmp ch,61h
+	jb s 			;小于
+	cmp ch,7ah
+	ja s 			;大于
+	and ch,11011111B ;将第5位置为0，则为大写字符
+	mov ds:[si],ch
+s:
+	inc si
+	jmp short letterc_loops
+letterc_loops_ok:	
+	popf
+	pop si
+	pop dx
+	pop cx
+	pop bx
+	pop ax
+	ret
+
+codesg ends
+end begin
+```
+
+![image-20240829191505430](https://cdn.jsdelivr.net/gh/yyheroi/yyheroi_blog_img_resource@main/images/202408291915513.png)
+
+# 第十二章内中断
+
+中断向量表存放在：0000：0000到0000：03FF的1024个单元中
+
+## 检测点12.1
+
+（1）用debug查看内存，情况如下
+
+`0000：0000`  `68 10 A7 00 8B 01 70 00-16 00 9D 03 8B 01 70 00`
+
+则3号中断源对应的中断处理程序的入口地址为：`0070：018B`
+
+（2）存储N号中断源对应的中断处理程序入口的偏移地址的内存单元的地址为：`N*4`
+
+存储N号中断源对应的中断处理程序入口的段地址的内存单元的地址为：`4N+2`
+
+
+
+## 中断过程
+
+- 取出中断类型码N
+- pushf
+- TF=0，IF=0
+- push CS
+- push IP
+- (IP)=(N*4)
+
+中断处理程序的编写方法：
+
+- 保存用到的寄存器
+- 处理中断
+- 恢复用到的寄存器
+- 用iret指令返回
+
+iret指令的功能用汇编语法描述为：
+
+pop IP
+
+pop CS
+
+popf
+
+iret通常和硬件自动完成的中断过程配合实验，寄存器入栈的顺序是标志寄存器、CS、IP，而iret的出栈顺序是IP、CS、标志寄存器，刚好和其相对应，实现了用执行中断处理程序前的cpu现场恢复标志寄存器和CS、IP的工作。iret指令执行后，cpu回到执行中断处理程序前的执行点继续执行程序
+
+```
+mov ax,1000h
+mov bh,1
+div bh
+
+溢出 1/ax 产生0号中断，0号中断处理程序是在屏幕中间显示"Divide overflow"
+```
+
+## do0.asm
+
+```assembly
+assume cs:code 
+code segment
+start:
+	mov ax,cs
+	mod ds,ax
+	mov si,offset do0
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	mov cx,offset do0end-offset do0
+	cld
+	rep movsb
+	
+	mov ax,4c00h
+	int 21h
+	
+do0: 
+	jmp short do0start
+	db "overflow!"
+do0start:
+	mov ax,cs
+	mov ds,ax
+	mov si,202h
+	
+	mov ax,0b800h
+	mov es,ax
+	mov di,12*160+36*2
+	
+	mov cx,9
+s:
+	mov al,ds:[si]
+	mov es:[di],al
+	inc si
+	add di,2
+	loop s
+	
+	mov ax 4c00h
+	int 21h
+do0end:
+	nop
+code ends
+end start
 ```
 
 
