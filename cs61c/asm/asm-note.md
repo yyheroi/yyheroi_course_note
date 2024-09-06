@@ -3199,15 +3199,27 @@ assume cs:code
 code segment
 start:
 	mov ax,cs
-	mod ds,ax
+	mov ds,ax
 	mov si,offset do0
 	mov ax,0
 	mov es,ax
 	mov di,200h
+	;安装do0 至0000：0200
 	mov cx,offset do0end-offset do0
 	cld
 	rep movsb
+
+	;设置中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[0*4],200h	;ip
+	mov word ptr es:[0*4+2],0 	;cs
 	
+	;测试被除数为0 
+	mov ax,2
+	mov dl,0
+	div dl
+
 	mov ax,4c00h
 	int 21h
 	
@@ -3231,7 +3243,7 @@ s:
 	add di,2
 	loop s
 	
-	mov ax 4c00h
+	mov ax,4c00h
 	int 21h
 do0end:
 	nop
@@ -3240,4 +3252,65 @@ end start
 ```
 
 
+
+## 实验12 编写0号中断的处理程序
+
+s12.asm
+
+```assembly
+assume cs:code 
+code segment
+start:
+	mov ax,cs
+	mov ds,ax
+	mov si,offset do0
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	;安装do0 至0000：0200
+	mov cx,offset do0end-offset do0
+	cld
+	rep movsb
+
+	;设置0号中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[0*4],200h	;ip
+	mov word ptr es:[0*4+2],0 	;cs
+	
+	;测试结果溢出 跳到0000：0000 0号中断获取 cs：ip
+	mov ax,100h
+	mov bh,1
+	div bh
+
+	mov ax,4c00h
+	int 21h
+	
+do0: 
+	jmp short do0start
+	db "divide error!"
+do0start:
+	mov ax,cs  	  ;获取 0000：0002中的cs值 也就是 0
+	mov ds,ax
+	mov si,202h
+	
+	mov ax,0b800h
+	mov es,ax
+	mov di,12*160+36*2
+	
+	mov cx,13 ;字符串长度
+s:
+	mov al,ds:[si]
+	mov es:[di],al
+	inc si
+	add di,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+do0end:
+	nop
+code ends
+end start
+```
 
