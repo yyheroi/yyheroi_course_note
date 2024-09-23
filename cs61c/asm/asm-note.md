@@ -3314,3 +3314,436 @@ code ends
 end start
 ```
 
+# 第十三章
+
+## 检测点 13.1
+
+t131.asm  x
+
+```assembly
+assume cs:code 
+code segment
+start:
+	mov ax,cs
+	mov ds,ax
+	mov si,offset lp
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	;安装7ch中断例程 至0000：0200
+	mov cx,offset lpend-offset lp
+	cld
+	rep movsb
+	;设置7ch中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[124*4],200h	;ip
+	mov word ptr es:[124*4+2],0 	;cs
+		
+	mov ax,0b800h
+	mov es,ax
+	mov di,160*12
+	
+	mov bx,offset s-offset se
+	mov cx,80
+s:	
+	mov byte ptr es:[di],'!'
+	add di,2
+	int 7ch
+se: 
+	nop
+	
+	mov ax,4c00h
+	int 21h
+
+;7ch中断例程
+lp:	
+	push bp
+	mov bp,sp
+	dec cx
+	jcxz lpret
+	add ss:[bp+2],bx
+lpret:
+	pop bp
+	iret
+lpend:
+	nop
+	
+code ends
+end start
+```
+
+(1)在上面的内容中，我们用 7ch 中断例程实现 loop 的功能，则上面的 7ch 中断例
+程所能进行的最大转移位移是多少? `-32768-32767 `
+(2)用 7ch 中断例程完成 jmp near ptrs指令的功能，用 bx 向中断例程传送转移位移。
+应用举例:在屏幕的第 12 行，显示 data 段中以0结尾的字符串
+
+t132.asm x
+
+```assembly
+assume cs:code
+data segment
+	db 'conversation',0
+data ends
+code segment
+start:
+	mov ax,cs
+	mov ds,ax
+	mov si,offset lp
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	;安装7ch中断例程 至0000：0200
+	mov cx,offset lpend-offset lp
+	cld
+	rep movsb
+	;设置7ch中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[124*4],200h	;ip
+	mov word ptr es:[124*4+2],0 	;cs
+		
+	mov ax,data
+	mov ds,ax
+	mov si,0
+	mov ax,0b800h
+	mov es,ax
+	mov di,12*160
+s:
+	cmp byte ptr [si],0
+	je ok
+	mov al,[si]
+	mov es:[di],al
+	inc si
+	add di,2
+	mov bx,offset s-offset ok	;设置bx为转移位置=标号ok至标号s的转移位移
+	int 7ch 					;功能相当于： jmp near ptr s
+ok:	
+	mov ax,4c00h
+	int 21h
+
+;7ch中断例程
+lp:	
+	push bp
+	mov bp,sp
+	add ss:[bp+2],bx
+	pop bp
+	iret
+lpend:
+	nop
+
+code ends
+end start	
+```
+
+## 检测点13.2
+
+判断下面说法的正误:
+
+1.我们可以编程改变FFFF：0 处的指令，使得CPU不去执行BIOS中的硬件系统检测和初始化程序
+
+  `错误，该内存区域为BIOS的ROM，可读不可写`
+
+2.int 19h中断例程，可以由DOS提供 
+
+ `错误，int19h 不是由 DOS 提供的，因为在 DOS 装入中断例程前 int19h 已存在于内存中，int19h恰恰是为了引导操作系统的安装，在此之前操作系统还未建立不可用。`
+
+
+
+d136.asm
+
+编程：在屏幕的第五行12列显示3个红底高亮闪烁绿色的"a"
+
+```assembly
+assume cs:code
+code segment 
+
+	mov ah,2			;置光标
+	mov bh,0			;第0页
+	mov dh,5			;dh中放行号
+	mov dl,12			;dl中放列号
+	int 10h
+	
+	mov ah,9			;在光标位置中显示字符
+	mov al,'a' 			;字符
+	mov bl,11001010b	 ;颜色属性
+	mov bh,0			;第0页
+	mov cx,3			;字符重复个数
+	int 10h
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end
+```
+
+## 实验13 编写、应用中断例程
+
+(1)编写并安装 int 7ch 中断例程，功能为显示一个用0结束的字符串，中断例程安装在 0:200 处。
+参数:(dh)=行号，(dl)=列号，(cl)=颜色，ds:si指向字符串首地址。
+以上中断例程安装成功后，对下面的程序进行单步跟踪，尤其注意观察int、iret 指令执行前后 CS、IP 和栈中的状态。
+
+#### s131.asm
+
+```assembly
+assume cs:code
+data segment
+	db "welcome to masm!",0
+data ends
+code segment
+start:
+	call install_lp7
+	
+	mov dh,10
+	mov dl,10
+	mov cl,2
+	mov ax,data
+	mov ds,ax
+	mov si,0
+	int 7ch
+
+	mov ax,4c00h
+	int 21h
+
+lp7:
+	push ax 
+	push bx
+	push cx
+	push es
+	push si
+
+	mov ax,0b800h
+	mov es,ax
+
+	mov ax,2  	;获取偏移量 保存到bx中  bx = 2*dl + 160*dh 
+	mul dl
+	mov bx,ax	;bx保存 dl*2的值
+	mov ax,160
+	mul dh
+	add bx,ax	;bx保存160*dh+ax的值
+
+	mov al,cl
+	mov cl,0
+change:
+	mov ch,ds:[si]
+	jcxz show_str_ok
+ 	mov es:[bx],ch
+ 	mov es:[bx+1],al
+ 	add bx,2
+ 	inc si
+	jmp short change
+
+show_str_ok:
+	pop si
+	pop es
+	pop cx
+	pop bx 
+	pop ax
+	iret
+lp7end:
+	nop
+
+install_lp7:
+	push ax
+	push si
+	push es
+	push cx
+
+	mov ax,cs
+	mov ds,ax
+	mov si,offset lp7
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	;安装7ch中断例程 至0000：0200
+	mov cx,offset lp7end-offset lp7
+	cld
+	rep movsb
+	;设置7ch中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[124*4],200h	;ip
+	mov word ptr es:[124*4+2],0 	;cs
+
+	pop cx
+	pop es
+	pop si
+	pop ax
+	ret
+
+code ends
+end start
+```
+
+(2)编写并安装 int 7ch 中断例程，功能为完成 loop 指令的功能。
+参数:(cx)=循环次数，(bx)=位移。
+
+以上中断例程安装成功后，对下面的程序进行单步跟踪，尤其注意观察int、iret 指令执行前后 CS、IP 和栈中的状态。
+在屏幕中间显示 80个“!”
+
+#### s132.asm
+
+```assembly
+assume cs:code
+code segment
+start:
+	
+	call install_lp7
+	mov ax,0b800h
+	mov es,ax
+	mov di,160*12
+	mov bx,offset s-offset se 	;设置从标号se到s的转移位移
+	mov cx,80
+s:
+	mov byte ptr es:[di],'!'
+	add di,2
+	int 7ch 			;如果(cx) != 0 转移到标号s处
+se:
+	nop
+	mov ax,4c00h
+	int 21h
+
+lp7:
+	push bp
+	mov bp,sp
+	dec cx
+	jcxz lpret
+	add ss:[bp+2],bx
+lpret:
+	pop bp
+	iret
+lp7end:
+	nop
+
+
+install_lp7:
+	push ax
+	push si
+	push es
+	push cx
+
+	mov ax,cs
+	mov ds,ax
+	mov si,offset lp7
+	mov ax,0
+	mov es,ax
+	mov di,200h
+	;安装7ch中断例程 至0000：0200
+	mov cx,offset lp7end-offset lp7
+	cld
+	rep movsb
+	;设置7ch中断向量
+	mov ax,0
+	mov es,ax
+	mov word ptr es:[124*4],200h	;ip
+	mov word ptr es:[124*4+2],0 	;cs
+
+	pop cx
+	pop es
+	pop si
+	pop ax
+	ret
+code ends
+end start
+```
+
+
+
+(3)下面的程序，分别在屏幕的第 2、4、6、8 行显示4句英文诗，补全程序。
+
+#### s133.asm
+
+```assembly
+assume cs:code
+code segment
+	s1:		db 'Good,better,best,','$'
+	s2:		db 'Never let it reset,','$'
+	s3:		db 'Till good is better,','$'
+	s4:		db 'And better,best.','$'
+	s:		dw offset s1,offset s2,offset s3,offset s4
+    row:	db  2,4,6,8
+    
+start:
+	mov ax,cs
+	mov ds,ax
+	mov bx,offset s
+	mov si,offset row
+	mov cx,4
+ok:	
+	mov bh,0 	;第0页
+	mov dh,ds:[si] 	;dh中存放行号
+	mov dl,0	;dl中存放列
+	mov ah,2	;10h号中断的2号子程序，
+	int 10h
+	
+	mov dx,ds:[bx] 	;指向需要显示的字符串，以$作为结束符
+	mov ah,9		;功能号9，表示在光标位置显示字符串
+	int 21h
+	
+	add bx,2
+	inc si
+	
+	loop ok
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+	
+```
+
+# 第十四章
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
