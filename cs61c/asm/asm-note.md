@@ -3693,57 +3693,1385 @@ end start
 
 # 第十四章
 
+## 检测点14.1
+
+![image-20240923114111839](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20240923114111839.png)
+
+（1）编程，读取CMOS RAM的2号单元的内容
+
+```assembly
+mov al,2
+out 70h,al 	;往70端口写入数据2  70端口是地址位
+in al,71h	;从71端口读入数据
+```
+
+（2）编程，向CMOS RAM的2号单元写入0
+
+```assembly
+mov al,2
+out 70h,al 	;往70端口写入数据2  70端口是地址位
+mov al,0  	;
+out 71,al	;往71端口写入0  71端口是数据位
+```
+
+## 检测点14.2
+
+编程，用加法和移位指令计算 （ax）=（ax）*10
+
+（ax）`*`10=（ax）`*`2+（ax）`*`8
+
+```assembly
+mov ax,10
+mov cl,2
+shl ax,cl
+mov bx,ax
+mov ax,10
+mov cl,8
+shl ax,cl
+add ax,bx
+```
+
+
+
+## 实验14 访问CMOS RAM
+
+编程，以“年/月/日 时：分：秒”的格式，显示当前的日期、时间
+
+s14.asm
+
+```assembly
+assume cs:code
+data segment 
+    db '2024/09/23 00:00:00','$'
+data ends
+
+code segment
+start:
+    mov ax,data
+    mov es,ax
+
+    call get_hms_func
+    call get_ymd_func
+
+	mov dh,12 	;dh中存放行号
+	mov dl,24	;dl中存放列
+    mov bh,0 	;第0页
+	mov ah,2	;10h号中断的2号子程序
+	int 10h
+	
+    mov ax,data
+    mov ds,ax
+	mov dx,0 	  ;指向需要显示的字符串，以$作为结束符
+	mov ah,9	  ;功能号9，表示在光标位置显示字符串
+	int 21h
+
+    mov ax,4c00h
+    int 21h
+
+
+get_hms_func:    
+    mov dl,0
+    mov di,17
+    mov cx,3
+    push cx
+    push bx
+    push dx
+    push di
+    push ax
+get_hms: 
+    mov al,dl
+    out 70h,al
+    in al,71h
+
+    mov ah,al
+    push cx
+    mov cl,4
+    shr ah,cl
+    pop cx
+    and al,00001111b
+    
+    add ah,30h
+    add al,30h
+    mov byte ptr es:[di],ah
+    mov byte ptr es:[di+1],al
+
+    sub di,3
+    add dl,2
+    loop get_hms
+
+get_hms_ret:
+    pop ax
+    pop di
+    pop dx
+    pop bx
+    pop cx
+    ret
+
+get_ymd_func:
+    mov di,8
+    mov dl,7
+    mov cx,3
+
+    push cx
+    push bx
+    push dx
+    push di
+    push ax
+get_ymd:
+    mov al,dl
+    out 70h,al
+    in al,71h
+
+    mov ah,al
+    push cx
+    mov cl,4
+    shr ah,cl
+    pop cx
+    and al,00001111b
+    add ah,30h
+    add al,30h
+    mov byte ptr es:[di],ah
+    mov byte ptr es:[di+1],al
+    
+    sub di,3
+    inc dl
+    loop get_ymd
+get_ymd_ret:
+    pop ax
+    pop di
+    pop dx
+    pop bx
+    pop cx
+    ret
+
+   
+code ends
+end start
+
+```
+
+
+
+# 第十五章
+
+## 15.2可屏蔽中断
+
+中断触发过程
+
+1.取出中断类型码n
+
+2.标志寄存器入栈，IF=0，TF=0
+
+3.CS、IP入栈
+
+4.（IP)=(n*4),(CS)=(n`*`4+2)
+
+在这个过程中IF置为0的原因是，禁止其他的可屏蔽中断
+
+sti ，设置IF=1
+
+cli，设置IF=0
+
+## 15.4编写int 9 中断例程
+
+### 中断过程
+
+> 取得中断类型码N
+> pushf
+> TF=0 IF=0
+> push CS
+> push IP
+> （IP）=（N`*`4） （CS）=（N`*`4+2）
+
+### iret指令
+
+>pop IP
+>pop CS
+>popf
+
+
+
+键盘输入的处理过程
+
+1.键盘产生扫描码
+2.扫描码送人60h端口
+3.引发9号中断
+4.cpu指向int 9中断例程处理键盘输入(1，2，3步都是由硬件完成)
+
+`sbb ax,bx ;实现的功能是： (ax)=(ax)-(bx)-CF; CF是借位`
+
+循环100000h次
+
+```assembly
+	mov dx,10h
+	mov ax,0
+s:	
+	sub ax,1
+	sbb dx,0 ;dx=dx-0-CF dx减去10次,ax产生的借位CF; 即循环100000
+	cmp ax,0 ;低位ax不等于0继续循环
+	jne s
+	cmp dx,0 ;高位dx不等于0继续循环
+	jne s
+```
+
+
+
+循环显示a-z字符的程序如下：
+
+#### s1504.asm
+
+```assembly
+assume cs:code
+stack segment
+	db 128 dup(0)
+stack segment
+
+start: 
+	mov ax,stack
+	mov ss,ax
+	mov sp,128
+	
+	mov ax,0b800h
+	mov es,ax
+	mov ah,'a'
+s:
+	mov es:[160*12+40*2],ah
+	call delay
+	inc ah
+	cmp ah,'z'
+	jna s 	;比z小则循环
+	
+	mov ax,4c00h
+	int 21h
+	
+delay:
+	push ax
+	push dx
+	mov dx,10h  ;循环100000h次
+	mov ax,0
+s1:
+	sub ax,1
+	sbb dx,0
+	cmp ax,0
+	jne s1
+	cmp dx,0
+	jne s1
+	pop dx
+	pop ax
+	ret
+code ends
+end start
+	
+```
 
 
 
 
 
+### int9中断例程 
+
+#### s15041.asm
+
+显示a - z，按下Esc键后，改变显示颜色
+
+键盘输入达到69h后就会引发9号中断，cpu则去执行int 9中断例程
+
+编写int 9中断例程，功能如下
+
+1.从60h端口中读出键盘的输入
+2.调用BIOS的int 9 中断例程，处理其他硬件细节
+3.判断是否为Esc的扫描码，如果是，改变显示的颜色后返回；如果不是则直接返回
+
+```assembly
+assume cs:code
+
+stack segment 
+	db 128 dup(0)
+stack ends
+
+data segment
+	dw 0,0
+data ends
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,128
+	
+	mov ax,data
+	mov ds,ax
+	
+	mov ax,0
+	mov es,ax
+	
+	push es:[9*4]
+	pop ds:[0]
+	push es:[9*4+2]
+	pop ds:[2] ;将原来的中断例程的入口地址保存到ds:0 ds:2单元中
+	
+	mov word ptr es:[9*4],offset int9
+	mov es:[9*4+2],cs	;在中断向量表中设置新的int 9中断例程的入栈地址
+	
+	mov ax,0b800h
+	mov es,ax
+	mov ah,'a'
+s:
+	mov es:[160*12+40*2],ah
+	call delay
+	inc ah
+	cmp ah,'z'
+	jna s
+	
+	mov ax,0
+	mov es,ax
+	
+	push ds:[0]
+	pop es:[9*4]	;将中断向量表中int 9中断例程的入口恢复为原来的入口地址
+	push ds:[2]
+	pop es:[9*4+2]
+	
+	mov ax,4c00h
+	int 21h
+
+delay:
+	push ax
+	push dx
+	mov dx,5h
+	mov ax,0
+s1:
+	sub ax,1
+	sbb dx,0
+	cmp ax,0
+	jne s1
+	cmp dx,0
+	jne s1
+	pop dx
+	pop ax
+	ret
+
+int9: 
+	push ax
+	push bx
+	push es
+	
+	in al,60h
+
+	pushf
+	pushf
+	pop bx
+	and bh,11111100b 	
+	push bx
+	popf
+	call dword ptr ds:[0] 	;对int指令进行模拟，调用原来的int 9中断例程
+	
+	cmp al,1 	;Esc扫描码
+	jne int9ret
+	
+	mov ax,0b800h
+	mov es,ax
+	inc byte ptr es:[160*12+40*2+1] ;将属性值加1，改变颜色
+
+int9ret:
+	pop es 
+	pop bx
+	pop ax
+	iret
+	
+code ends
+end start
+```
+
+## 检测点15.1
+
+1.进入中断例程后IF和TF都已经置0，没有必要进行设置了，对于以下程序：
+
+```assembly
+	pushf
+	pushf
+	pop bx
+	and bh,11111100b 	
+	push bx
+	popf
+	call dword ptr ds:[0] 
+```
+
+可以精简为：
+
+```assembly
+pushf
+call dword ptr ds:[0] 
+```
+
+2.s15041.asm中主程序有什么潜在的问题？
+
+在主程序中，如果执行设置int 9中断例程的段地址的指令之间发生了键盘中断，则CPU将转去一个错误的地址执行，将发生错误，修改如下
+
+添加cli 和sti暂时屏蔽中断
+
+```assembly
+	cli
+	mov word ptr es:[9*4],offset int9
+	mov es:[9*4+2],cs	;在中断向量表中设置新的int 9中断例程的入栈地址
+	sti
+```
+
+## 15.5安装新的int 9中断例程
+
+任务：安装一个新的int 9中断例程
+
+功能：在dos下，按F1键后改变当前屏幕的显示颜色，其他键照常处理
+
+1.改变屏幕的显示颜色
+
+```assembly
+    mov ax,0b800h
+    mov es,ax
+    mov bx,1
+    mov cx,2000
+s:	
+	inc byte ptr es:[bx]
+	add bx,2
+	loop s
+```
+
+2.其他键照常处理
+
+可以调用原int 9中断处理程序，来处理其他键盘的输入
+
+3.原int 9中断例程入口地址保存
+
+因为在新编写的int 9中断例程中要调用原int 9中断例程，所以，要保存原int 9中断，将地址保存在0：200单元处
+
+4.新int 9中断例程的安装
+
+新的int 9中断例程安装在0：204处
+
+#### s1505.asm
+
+```assembly
+assume cs:code
+
+stack segment
+	db 128 dup(0)
+stack ends
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,128
+	
+	push cs
+	pop ds
+	
+	mov ax,0
+	mov es,ax
+	
+	mov si,offset int9		;设置ds:si执向源地址
+	mov di,204h				;设置es:di指向目的地址
+	mov cx,offset int9end-offset int9 ;设置cx为传输长度
+	cld						;设置传输方向为正
+	rep movsb				
+	
+	push es:[9*4]
+	pop es:[200h]
+	push es:[9*4+2]
+	pop es:[202h]
+	
+	cli
+	mov word ptr es:[9*4],204h
+	mov word ptr es:[9*4+2],0h
+	sti
+	
+	mov ax,4c00h
+	int 21h
+
+int9:
+	push ax
+	push bx
+	push cx
+	push es
+	
+	in al,60h		;读取端口60h
+	
+	pushf
+	call dword ptr cs:[200h]	;当此中断例程执行时（CS）= 0
+	
+	cmp al,3bh
+	jne int9ret
+	
+	mov ax,0b800h
+	mov es,ax
+	mov bx,1
+	mov cx,2000
+s:
+	inc byte ptr es:[bx]
+	add bx,2
+	loop s
+int9ret:
+	pop es
+	pop cx
+	pop bx
+	pop ax
+	iret
+int9end:
+	nop
+	
+code ends
+end start
+```
 
 
 
 
 
+## 实验15 安装新的int 9中断例程
+
+功能：在dos下，按下 A键后，除非不再松开，如果松开，就显示满屏幕的"A"，其他键照常处理
+
+按下一个键时产生的扫描码称为通码，松开一个键产生的扫描码称为断码。断码 = 通码 + 80h
+
+键盘扫描码，键盘码，15.3
+
+![image-20241022111334692](.\imgs\image-20241022111334692.png)
+
+A键的通码：1E
+A键的断码：9E
+
+注意：调用BIOS的中断例程时应该用“[dword](https://so.csdn.net/so/search?q=dword&spm=1001.2101.3001.7020) ptr”而不是“word ptr”。
+
+### s15.asm
+
+```assembly
+assume cs:code
+
+stack segment
+	db 128 dup(0)
+stack ends
+
+code segment
+start:
+	mov ax,stack
+	mov ss,ax
+	mov sp,128
+
+	push cs
+	pop ds
+
+	mov ax,0
+	mov es,ax
+
+	mov si,offset int9
+	mov di,204h
+	mov cx,offset int9end-offset int9
+	cld
+	rep movsb 	;将ds:si 拷贝到 es:di 长度cx
+
+	push es:[9*4]  		;保存原int9地址
+	pop es:[200h]
+	push es:[9*4+2]
+	pop es:[202h]
+	cli
+	mov word ptr es:[9*4],204h  ;新的int9中断例程地址修改到中断向量表中
+	mov word ptr es:[9*4+2],0h
+	sti
+
+	mov ax,4c00h
+	int 21h
+
+int9:
+	push ax
+	push bx
+	push cx
+	push es
+
+	in al,60h ;从60H端口接收键盘输入
+
+	pushf ;将标志寄存器压入栈,下面模拟调用原int9例程
+	call dword ptr cs:[200h]  ;中断执行时cs为0 0:200H处存放BIOS的9号中断例程的入口地址
+
+	cmp al,9Eh 			;A的通码为1EH，断码为9EH
+	jne int9ret 		;若按下的是A键，则显示满屏的A
+
+	mov ax,0b800h
+	mov es,ax
+	mov bx,0
+	mov cx,2000   		;一屏能显示2000个字符
+s:
+	mov byte ptr es:[bx],'A'
+	add bx,2
+	loop s
+
+int9ret: 				;程序返回
+	pop es
+	pop cx
+	pop bx
+	pop ax
+	iret
+int9end:
+	nop
+
+code ends
+end start
+
+```
+
+
+
+# 第十六章 直接定址表
+
+### 检测点16.1
+
+下面的程序将code段中a处的8个数据累加，结果存储到b处的双字节中，补全程序
+
+```assembly
+assume cs:code
+code segment
+	a dw 1,2,3,4,5,6,7,8
+	b dd 0
+start:
+	mov si,0
+	mov cx,8
+s:	
+	mov ax,a[si]
+	add word ptr b[0],ax
+	adc word ptr b[2],0
+	add si,2
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+
+code ends
+end start
+```
+
+
+
+## 16.2在其他段中使用数据标号
+
+### assume
+
+通常我们不在`代码段`中定义数据。
+通常在`数据段`定义数据，为了在`代码段`中直接使用`数据标号`访问数据，
+我们需要为`编译器`使用伪指令`assume`将`标号所在段`与一个`段寄存器`关联起来。
+（这个关联是给`编译器`看的。`DS`还是需要我们自己设置）
+
+### 通过标号取地址
+
+可以将标号当作数据用，此时，编译器视其地址为值。
+是取 偏移地址 还是 偏移地址和段地址 取决于数据的类型：
+
+- 偏移地址
+  C的类型为 dw 字，就只取偏移地址
+
+```assembly
+data segment
+	a db 1,2,3,4,5,6,7,8
+	b dw 0
+	c dw a,b	; 相当于：c dw offset a offset b
+data ends
+```
+
+- 偏移地址 + 段地址
+  C的类型为 dd 双字，就要取偏移地址和段地址
+
+```assembly
+data segment
+	a db 1,2,3,4,5,6,7,8
+	b dw 0
+	c dd a,b	; 相当于：c dw offset a,seg a,offset b,seg b
+data ends
+```
+
+
+
+### 检测点16.2
+
+下面的程序将data段中a处的8个数据累加，结果存储到b处的字中
+
+分析
+
+只需要设置一下`数据段`地址即可。注意 `assum es:data` 关联的是 `es`
+
+```assembly
+assume cs:code,es:data
+data segment
+	a db 1,2,3,4,5,6,7,8
+	b dw 0
+data ends
+code segment
+start:
+	mov ax,data
+	mov es,ax
+	mov si,0
+	mov cx,8
+s:
+	mov al,a[si]
+	mov ah,0
+	add b,ax
+	inc si
+	loop s
+	
+	mov ax,4c00h
+	int 21h
+code ends
+end start
+```
+
+
+
+## 16.3 直接定址表（Direct Addressing Table）
+
+在8086汇编语言中，直接定址表通常用于存储一系列数据，并允许程序通过索引直接访问表中的特定元素。
+是常用的空间换时间算法，适用于键的数量相对固定且不会频繁变化的情况。
+
+直接定址表的好处包括：
+
+> 快速访问：由于键直接映射到地址，因此访问速度非常快，几乎没有延迟。
+> 简单性：实现直接定址表的算法相对简单，容易理解和维护。
+> 预分配内存：在创建直接定址表时，可以根据预计的键数量预先分配足够的内存空间，避免了动态分配内存的开销
+
+
+
+### 例1 se1631.asm
+
+以十六进制的形式在屏幕中间显示给定的字节型数据。
+
+**分析**
+每个`字节`可分为`高低`两个`4位`。每`4位`对应一个`十六进制数。 如果每4位取出来 `+30h`转`ascii` 就挺麻烦， 不如直接用`数值`当`索引`去一块内存中直接取对应字符。
+
+- **用`直接定址表`算法更`清晰和简洁`**
+
+```assembly
+assume cs:code
+code segment
+ start:	mov al,0F1h
+		call showbyte
+		
+		mov ax,4c00h
+		int 21h
+
+showbyte:
+		jmp short show
+		table db '0123456789ABCDEF'	;字符表
+
+	show:
+		push bx
+		push es
+		
+		mov bx,0b800h		; 设置显存段
+		mov es,bx
+		
+		mov ah,al
+		shr ah,1
+		shr ah,1
+		shr ah,1
+		shr ah,1			;右移4位，ah 保留高4位的值
+		and al,00001111b	;高4位置0，a1 保留低4位的值
+
+		mov bl,ah
+		mov bh,0
+		mov ah,table[bx]	;高4位的值当索引，取得对应的字符
+		mov es:[160*12+40*2],ah
+		
+		mov bl,al
+		mov bh,0
+		mov al,table[bx]	;低4位的值当索引，取得对应的字符
+		mov es:[160*12+40*2+2],al
+		
+		pop es
+		pop bx
+		ret
+		
+code ends
+end start
+
+```
+
+
+
+### 例2  se1632.asm
+
+编写一个子程序，计算 `sim(x)`，`x` ∈ `{ 0°，30°，60°，90°，120°，150°，180}`，并在屏幕中间显示计算结果。比如 `sin(30)` 的结果显示为`“0.5”`
+
+#### 分析
+
+- **用`直接定址表`算法提高算法性能。**
+
+`table` 类型是 `dw
+
+| -              | ag0   | ag30  | ag60  | ag90  | ag120 | ag150 | ag180 |
+| -------------- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| 值             | 0     | 0.5   | 0.866 | 1     | 0.866 | 0.5   | 0     |
+| 索引 `角度/30` | 0     | 1     | 2     | 3     | 4     | 5     | 6     |
+| 位置           | 1B~1C | 1D~20 | 21~26 | 27~28 | 29~2E | 2F~32 | 33~34 |
+| 长度 `字节`    | 2     | 4     | 6     | 2     | 6     | 4     | 2     |
+
+
+
+```assembly
+assume cs:code
+code segment
+ start:	mov ax,120
+		call showsin
+		
+		mov ax,4c00h
+		int 21h
+
+showsin:				; 位 置	  机器码	反汇编
+		jmp short show	; cs:0B	  EB28		jmp 0035
+		; table 
+		table	dw	ag0,ag30,ag60,ag90,ag120,ag150,ag180 ;字符串偏移地址表 cs:0d~1a
+		ag0		db	'0',0		;cs:1B~1C	sin(0)  对应的字符串“0”
+		ag30	db	'0.5',0		;cs:1D~20	sin(30) 对应的字符串“0.5”
+		ag60	db	'0.866',0	;cs:21~26	sin(60) 对应的字符串“0.866”
+		ag90	db	'1',0		;cs:27~28	sin(90) 对应的字符串“1”;
+		ag120	db	'0.866',0	;cs:29~2E	sin(120)对应的字符串“0.866”
+		ag150	db	'0.5',0		;cs:2F~32	sin(150)对应的字符串“0.5”
+		ag180	db	'0',0		;cs:33~34	sin(180)对应的字符串“0”	
+
+	show:
+		push bx
+		push es
+		push si
+		
+		mov bx,0b800h		; 设置显存段
+		mov es,bx
+		
+		;以下用角度值/30 作为相对于 table 的偏移，取得对应的字符串的偏移地址，放在 bx 中
+		mov ah,0
+		mov bl,30
+		div bl
+		mov bl,al
+		mov bh,0
+		add bx,bx
+		mov bx,table[bx]		
+
+		; 以下显示 sin(x) 对应的字符串
+		mov si,160*12+40*2
+ shows: mov ah,cs:[bx]
+		cmp ah,0
+		je showret
+		mov  es:[si],ah
+		inc bx
+		add si,2
+		jmp short shows		
+showret:
+		pop si
+		pop es
+		pop bx
+		ret
+		
+code ends
+end start
+
+```
+
+
+
+## 16.4 程序入口地址的直接定址表
+
+在`直接定址表`中存储`子程序`的`地址`。
+
+| 功能      | 实现一个子程序 `setscreen`，为显示输出提供如下功能。 1. 清屏; 2. 设置前景色; 3. 设置背景色; 4. 向上滚动一行。 |
+| --------- | ------------------------------------------------------------ |
+| 参数 `ah` | 用 `ah` 寄存器传递`功能号`： 0 表示清屏， 1 表示设置前景色， 2 表示设置背景色, 3 表示向上滚动一行; |
+| 参数 `al` | 用 `al` 传送`颜色值`，(al)∈ {0,1,2,3,4,5,6,7}。<br/>用于`1`、`2`号功能 |
+
+
+
+| 功能             | 实现方案                                                     |
+| ---------------- | ------------------------------------------------------------ |
+| 1.清屏           | 将显存中当前屏幕中的字符设为空格符;                          |
+| 2.设置前景色     | 设置显存中当前屏幕中处于奇地址的属性字节的第`0`、`1`、`2`位; |
+| 3.设置背景色     | 设置显存中当前屏幕中处于奇地址的属性字节的第`4`、`5`、`6`位; |
+| 4.又向上滚动一行 | 依次将第 `n+1` 行的内容复制到第`n`行处;最后一行为空。        |
+
+
+
+### 例1 se1641.asm
+
+```assembly
+assume cs:code
+code segment
+ start:	mov ah,3
+		mov al,2
+		call setscreen
+		
+		mov ax,4c00h
+		int 21h
+
+
+; =======================================================	
+; ------------------- 子程序 setscreen  -----------------
+; 设置显示效果
+; -------------------------------------------------------
+; 参数: ah	功能号：0 表示清屏，1 表示设置前景色，2 表示设置背景色, 3 表示向上滚动一行;
+; 参数: al	颜色值。用于1、2号功能
+; 返回: 无
+; -------------------------------------------------------
+setscreen:
+		jmp short set
+		
+		table dw sub1,sub2,sub3,sub4
+		
+	set:
+		push bx			; 备份寄存器
+		
+		cmp ah,3		; 判断功能号是否大于3
+		ja sret
+		mov bl,ah
+		mov bh,0
+		add bx,bx		; 根据 ah 中的功能号计算对应子程序在 table 表中的偏移
+		
+		call word ptr table[bx]
+		
+  sret:	pop bx			; 还原寄存器
+		ret				; 返回
+; -------------------- 子程序 setscreen -----------------
+; =======================================================
+
+; =======================================================	
+; ---------------------- 子程序 sub1 --------------------
+; 清屏：; 将显存中当前屏幕中的字符设为空格符
+; -------------------------------------------------------
+; 参数: 无
+; 返回: 无
+; -------------------------------------------------------
+  sub1:
+		push bx			; 备份寄存器
+		push cx
+		push es
+		
+		mov bx,0b800h
+		mov es,bx
+		mov bx,0
+		mov cx,2000
+ sub1s:	mov byte ptr es:[bx],' '	; 当前屏全设为空格
+		add bx,2
+		loop sub1s
+		
+		pop es			; 备份寄存器
+		pop cx
+		pop	bx
+		ret				; 返回
+; ---------------------- 子程序 sub1 --------------------
+; =======================================================
+
+; =======================================================	
+; ---------------------- 子程序 sub2 --------------------
+; 设置前景色：设置当前屏幕中所有奇列的第0、1、2位（前景色）
+; -------------------------------------------------------
+; 参数: 无
+; 返回: 无
+; -------------------------------------------------------
+  sub2:
+		push bx			; 备份寄存器
+		push cx
+		push es
+		
+		mov bx,0b800h
+		mov es,bx
+		mov bx,1						; 设置字符属性从 1 开始
+		mov cx,2000
+ sub2s:	and byte ptr es:[bx],11111000b	; 清空前景色 0、1、2
+		or es:[bx],al					; 应用 al 传来的颜色值
+		add bx,2
+		loop sub2s
+		
+		pop es			; 备份寄存器
+		pop cx
+		pop	bx
+		ret				; 返回
+; ---------------------- 子程序 sub2 --------------------
+; =======================================================
+
+; =======================================================	
+; ---------------------- 子程序 sub3 --------------------
+; 设置背景色：设置当前屏幕中所有奇列的第4、5、6位（背景色）
+; -------------------------------------------------------
+; 参数: 无
+; 返回: 无
+; -------------------------------------------------------
+  sub3:
+		push bx			; 备份寄存器
+		push cx
+		push es
+		
+		mov cl,4
+		shl al,cl		
+		mov bx,0b800h
+		mov es,bx
+		mov bx,1						; 设置字符属性从 1 开始
+		mov cx,2000
+ sub3s:	and byte ptr es:[bx],10001111b	; 清空 4 ~ 6
+		or es:[bx],al					; 应用 al 传来的颜色值
+		add bx,2
+		loop sub3s
+		
+		pop es			; 备份寄存器
+		pop cx
+		pop	bx
+		ret				; 返回
+; ---------------------- 子程序 sub3 --------------------
+; =======================================================
+
+; =======================================================	
+; ---------------------- 子程序 sub4 --------------------
+; 向上滚动一行：依次将第 n+1 行的内容复制到第n行处;最后一行为空。
+; -------------------------------------------------------
+; 参数: 无
+; 返回: 无
+; -------------------------------------------------------
+  sub4:
+		push cx			; 备份寄存器
+		push si
+		push di
+		push es
+		push ds
+				
+		mov si,0b800h
+		mov es,si
+		mov ds,si
+		mov si,160		; ds:si 指向第 n+1 行
+		mov di,0		; es:di 指向第 n 行
+		cld
+		mov cx,24		; 共复制 24 行
+
+ sub4s:	push cx
+		mov cx,160
+		rep movsb		; 复制
+		pop cx
+		loop sub4s
+		
+		mov cx,80
+		mov si,0
+ sub4s1:mov	byte ptr [160*24+si],' '
+		add si,2
+		loop sub4s1
+ 
+		pop ds			; 备份寄存器
+		pop es
+		pop	di
+		pop	si
+		pop	cx
+		
+		ret				; 返回
+; ---------------------- 子程序 sub4 --------------------
+; =======================================================
+code ends
+end start
+
+```
 
 
 
 
 
+## 实验16 编写包含多个功能子程序的中断例程
+
+## 需求
+
+安装一个新的 `int 7ch` 中断例程，为显示输出提供如下功能子程序。
+
+| 功能      | 1. 清屏; <br />2. 设置前景色; <br />3. 设置背景色;<br /> 4. 向上滚动一行。 |
+| --------- | ------------------------------------------------------------ |
+| 参数 `ah` | 用 `ah` 寄存器传递`功能号`： `0` 表示清屏，`1` 表示设置前景色，`2` 表示设置背景色, `3` 表示向上滚动一行; |
+| 参数 `al` | 用 `al` 传送`颜色值`，`(al)` ∈ `{ 0,1,2,3,4,5,6,7 }`。<br/>用于`1`、`2`号功能 |
+
+### s16.asm
+
+```assembly
+assume cs:code
+code segment
+ start:	
+		call install_int7ch
+ 		mov ah,0
+		mov al,3
+		int 7ch		
+
+		mov ax,4c00h
+		int 21h
+
+; =======================================================	
+; ------------------- 子程序 install_7ch  -----------------
+; 设置显示效果
+; -------------------------------------------------------
+; 参数: 	无
+; 返回: 无
+; -------------------------------------------------------
+install_int7ch:
+		push ax
+		push si
+		push di
+		push es
+		push cx
+		; ---------------- 安装(复制数据) ----------------
+		mov ax,cs
+		mov ds,ax
+
+		mov ax,0
+		mov es,ax
+
+		mov si,offset int7ch ;设置 ds:si 指向源地址
+		mov di,200h 		;设置 es:di 指向目的地址
+		mov cx,offset int7ch_end-offset int7ch
+		cld			;设置传输方向为正。movsb中si,di递增
+		rep movsb 	;将ds:si 拷贝到 es:di 长度cx
+		; ---------------- 安装(复制数据) ----------------
+
+		; ----------------- 设置中断向量 -----------------
+		mov ax,0
+		mov es,ax
+		cli								; 临时屏蔽中断
+		mov word ptr es:[7ch*4],200h  	; 设置【中断处理程序】的：偏移地址
+		mov word ptr es:[7ch*4+2],0h 	; 设置【中断处理程序】的：段地址
+		sti 							; 恢复中断响应
+		; ----------------- 设置中断向量 -----------------
+		pop cx
+		pop es
+		pop di
+		pop si
+		pop ax
+		ret
+; -------------------- 子程序 install_7ch -----------------
+; =======================================================
+
+	org 200h ; ORG 指定下面代码从一个特定地址开始编译
+	int7ch:
+		; =======================================================	
+		; ------------------- 子程序 setscreen  -----------------
+		; 设置显示效果
+		; -------------------------------------------------------
+		; 参数: ah	功能号：0 表示清屏，1 表示设置前景色，2 表示设置背景色, 3 表示向上滚动一行;
+		; 参数: al	颜色值。用于1、2号功能
+		; 返回: 无
+		; -------------------------------------------------------
+		setscreen:
+				jmp short set
+				
+				table dw sub1,sub2,sub3,sub4
+				
+			set:
+				push bx			; 备份寄存器
+				
+				cmp ah,3		; 判断功能号是否大于3
+				ja sret
+				mov bl,ah
+				mov bh,0
+				add bx,bx		; 根据 ah 中的功能号计算对应子程序在 table 表中的偏移
+				
+				call word ptr table[bx]
+				
+		  sret:	pop bx				; 还原寄存器
+				iret				; 返回
+		; -------------------- 子程序 setscreen -----------------
+		; =======================================================
+
+		; =======================================================	
+		; ---------------------- 子程序 sub1 --------------------
+		; 清屏：; 将显存中当前屏幕中的字符设为空格符
+		; -------------------------------------------------------
+		; 参数: 无
+		; 返回: 无
+		; -------------------------------------------------------
+		  sub1:
+				push bx			; 备份寄存器
+				push cx
+				push es
+				
+				mov bx,0b800h
+				mov es,bx
+				mov bx,0
+				mov cx,2000
+		 sub1s:	mov byte ptr es:[bx],' '	; 当前屏全设为空格
+				add bx,2
+				loop sub1s
+				
+				pop es			; 备份寄存器
+				pop cx
+				pop	bx
+				ret				; 返回
+		; ---------------------- 子程序 sub1 --------------------
+		; =======================================================
+
+		; =======================================================	
+		; ---------------------- 子程序 sub2 --------------------
+		; 设置前景色：设置当前屏幕中所有奇列的第0、1、2位（前景色）
+		; -------------------------------------------------------
+		; 参数: 无
+		; 返回: 无
+		; -------------------------------------------------------
+		  sub2:
+				push bx			; 备份寄存器
+				push cx
+				push es
+				
+				mov bx,0b800h
+				mov es,bx
+				mov bx,1						; 设置字符属性从 1 开始
+				mov cx,2000
+		 sub2s:	and byte ptr es:[bx],11111000b	; 清空前景色 0、1、2
+				or es:[bx],al					; 应用 al 传来的颜色值
+				add bx,2
+				loop sub2s
+				
+				pop es			; 备份寄存器
+				pop cx
+				pop	bx
+				ret				; 返回
+		; ---------------------- 子程序 sub2 --------------------
+		; =======================================================
+
+		; =======================================================	
+		; ---------------------- 子程序 sub3 --------------------
+		; 设置背景色：设置当前屏幕中所有奇列的第4、5、6位（背景色）
+		; -------------------------------------------------------
+		; 参数: 无
+		; 返回: 无
+		; -------------------------------------------------------
+		  sub3:
+				push bx			; 备份寄存器
+				push cx
+				push es
+				
+				mov cl,4
+				shl al,cl		
+				mov bx,0b800h
+				mov es,bx
+				mov bx,1						; 设置字符属性从 1 开始
+				mov cx,2000
+		 sub3s:	and byte ptr es:[bx],10001111b	; 清空 4 ~ 6
+				or es:[bx],al					; 应用 al 传来的颜色值
+				add bx,2
+				loop sub3s
+				
+				pop es			; 备份寄存器
+				pop cx
+				pop	bx
+				ret				; 返回
+		; ---------------------- 子程序 sub3 --------------------
+		; =======================================================
+
+		; =======================================================	
+		; ---------------------- 子程序 sub4 --------------------
+		; 向上滚动一行：依次将第 n+1 行的内容复制到第n行处;最后一行为空。
+		; -------------------------------------------------------
+		; 参数: 无
+		; 返回: 无
+		; -------------------------------------------------------
+		  sub4:
+				push cx			; 备份寄存器
+				push si
+				push di
+				push es
+				push ds
+						
+				mov si,0b800h
+				mov es,si
+				mov ds,si
+				mov si,160		; ds:si 指向第 n+1 行
+				mov di,0		; es:di 指向第 n 行
+				cld
+				mov cx,24		; 共复制 24 行
+
+		 sub4s:	push cx
+				mov cx,160
+				rep movsb		; 复制
+				pop cx
+				loop sub4s
+				
+				mov cx,80
+				mov si,0
+		 sub4s1:mov	byte ptr [160*24+si],' '
+				add si,2
+				loop sub4s1
+		 
+				pop ds			; 备份寄存器
+				pop es
+				pop	di
+				pop	si
+				pop	cx
+				
+				ret				; 返回
+		; ---------------------- 子程序 sub4 --------------------
+		; =======================================================
+   int7ch_end:	nop
+; --------------------- 中断处理程序 --------------------
+; =======================================================
+code ends
+end start
+
+```
 
 
 
 
 
+### ORG (Origin)
 
+在x86汇编语言中，`ORG`指令的全称是`Origin`，它指示[汇编程序](https://so.csdn.net/so/search?q=汇编程序&spm=1001.2101.3001.7020)从指定地址开始放置汇编指令生成的机器码。在Intel 8086及后续的x86架构中，`ORG`作为伪指令使用，用于设置汇编源代码中下一条指令的地址标记。
 
+> 数据标号 `table` 的地址错误问题
+> 当 `7ch` 中断例程安装时 `table` 记录的`安装程序`中它所处的`偏移位置`。
+> 而 `中断例程` 直正调用时 `call word ptr table[bx]` 这 `table[bx]` 取值肯定是错的。
+> 所以这里可以用 `org` 指定程序的起始地址。
 
+`ORG`在以下场景中需要用到`ORG`指令：
 
+1. **设定代码段起始地址：** 指定汇编代码在内存中的起始逻辑地址。
+   1.1. 如:设置引导扇区地址。
+   1.2. 如:插入或修改代码时，精确调整新代码在内存中的位置。
+2. **保持与物理地址一致性：** 确保代码按预期物理地址布局，适用于直接操作硬件或特定地址通信。
+3. **辅助重定位：** 为链接器提供初始逻辑地址参考，便于多目标文件链接时地址调整
 
+##### 1. 设定代码段起始地址
 
+假设有一个简单的 8086 程序，包含一个主程序和一个子程序，我们希望主程序从内存地址 `0x1000` 开始，子程序从 `0x2000` 开始。源代码可以这样组织：
 
+```assembly
+; 主程序段
+ORG 0x1000
 
+main:
+    ; 主程序代码...
+    call sub_program ; 调用子程序
+    ...
 
+; 子程序段
+ORG 0x2000
 
+sub_program:
+    ; 子程序代码...
+    ret
 
+```
 
+这里，`ORG 0x1000` 和 `ORG 0x2000` 分别指定了主程序和子程序的起始地址。汇编器在编译时，会根据这些 `ORG `指令将对应的[汇编指令](https://so.csdn.net/so/search?q=汇编指令&spm=1001.2101.3001.7020)分别定位到指定的内存地址。
 
+##### 2. 保持与物理地址一致性
 
+在某些嵌入式系统中，设备控制器可能要求特定的中断服务例程（Interrupt Service Routine, ISR）位于特定的物理地址。比如，假设一个外设的中断向量表指定了中断服务例程应在 `0x0000:0x8000`（物理地址 `0x8000`，段地址 `0x0000`）处。源代码可以这样编写：
 
+```assembly
+; 中断服务例程
+ORG 0x8000
 
+isr_handler:
+    ; 中断处理代码...
+    iret ; 结束中断服务例程
 
+```
 
+这里的 `ORG 0x8000` 确保了编译出的中断服务例程会被放置在物理地址 `0x8000`，满足设备控制器的要求。
 
+##### 3. 辅助重定位
 
+假设有一个大型项目，由多个独立编译的模块（.obj 或 .o 文件）组成。每个模块内部使用 ORG 设置了自身的逻辑地址，如模块 A 使用 ORG 0x1000，模块 B 使用 ORG 0x2000。在链接阶段，链接器需要将这些模块合并成一个可执行文件，并调整它们在最终内存布局中的地址。
 
+尽管实际链接时可能涉及更复杂的重定位过程，但模块内部的 ORG 指令提供了初始的逻辑地址参考。例如，模块 A 的第一条指令在链接前被认为位于 0x1000，链接器可以根据这个信息和其他模块的位置以及链接脚本的指示，决定模块 A 在最终可执行文件中的实际位置，并进行相应的地址修正。
 
-
-
-
-
-
-
-
-
-
-
-
+总的来说，ORG用于在汇编过程中控制代码在内存中的布局和定位。
 
