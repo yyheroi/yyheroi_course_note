@@ -5075,3 +5075,52 @@ isr_handler:
 
 总的来说，ORG用于在汇编过程中控制代码在内存中的布局和定位。
 
+
+# 第十七章
+
+int 16h从键盘缓冲区中读取键盘的输入，编程，接收用户键盘输入，输入 r 将屏幕上的字符设置为红色；输入 g 将屏幕上的字符设置为绿色；输入 b 将屏幕上的字符设置为蓝色
+
+### s172.asm
+
+```
+assume cs:code 
+code segment
+start:  mov ah,0
+		int 16h 	;
+		
+		mov ah,1
+		cmp al,'r'
+		je red
+		cmp al,'g'
+		je green
+		cmp al,'b'
+		je blue
+		jmp short sret
+
+red:	shl ah,1
+
+green:	shl ah,1
+
+blue:	mov bx,0b800h
+		mov es,bx
+		mov bx,1
+		mov cx,2000
+   s:	and byte ptr es:[bx],11111000b
+   		or es:[bx],ah
+   		add bx,2
+   		loop s
+
+sret:	mov ax,4c00h
+		int 21h
+
+code ends
+end start
+```
+
+
+
+## 检测点17.1
+
+"在int 16h中断例程中，一定有设置IF=1的指令。"    这种说法对吗？
+
+错误，：`int 16h` 是一个软件中断，不是由硬件触发的，因此中断标志寄存器的设置并不是必需的操作
